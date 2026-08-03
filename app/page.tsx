@@ -11,7 +11,7 @@ export default function HomePage() {
       description:
         'Add a new item. Requires: (1) FGA writer relation on inventory:default, ' +
         '(2) CIBA out-of-band push approval on the user\'s device, ' +
-        '(3) Token Vault OBO exchange for a Slack token, then posts a Slack notification.',
+        '(3) Token Vault OBO exchange for a Google token, then sends a Gmail notification.',
     },
   ]
 

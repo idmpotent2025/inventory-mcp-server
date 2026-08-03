@@ -79,7 +79,7 @@ const mcpHandler = createMcpHandler(
         title: 'Add Inventory Item',
         description:
           'Add a new item to the inventory. Requires FGA writer permission, CIBA ' +
-          'push approval, and posts a Slack notification via Auth0 Token Vault (OBO).',
+          'push approval, and sends a Gmail notification via Auth0 Token Vault (OBO).',
         inputSchema: addItemSchema,
       },
       async (params, ctx) => {

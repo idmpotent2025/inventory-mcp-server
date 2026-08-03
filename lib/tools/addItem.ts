@@ -56,25 +56,33 @@ const getContext = (_params: AddItemInput, ctx: MCPToolContext) => ({
 // ── Step 3 — Core execution ───────────────────────────────────────────────────
 //
 // Runs after FGA + CIBA + TokenVault checks all pass.
-// The TokenVault authorizer populates asyncLocalStorage with the Slack token
+// The TokenVault authorizer populates asyncLocalStorage with the Google token
 // before calling this function.
 //
 const coreExecute = async (params: AddItemInput, ctx: MCPToolContext) => {
   const item = addItem(params.name, params.quantity, params.price, ctx.sub)
 
-  // Post Slack notification using the federated token from TokenVault (OBO).
-  const slackToken = getCredentialsFromTokenVault()?.accessToken
-  if (slackToken && process.env.SLACK_CHANNEL_ID) {
-    await fetch('https://slack.com/api/chat.postMessage', {
+  // Send Gmail notification using the federated Google token from TokenVault (OBO).
+  const googleToken = getCredentialsFromTokenVault()?.accessToken
+  const recipient = process.env.NOTIFICATION_EMAIL_TO
+  if (googleToken && recipient) {
+    const subject = 'New Inventory Item Added'
+    const body = `New item added: "${params.name}" — qty ${params.quantity}, $${params.price}`
+    const mime = [
+      `To: ${recipient}`,
+      'Content-Type: text/plain; charset=utf-8',
+      `Subject: ${subject}`,
+      '',
+      body,
+    ].join('\r\n')
+    const raw = Buffer.from(mime).toString('base64url')
+    await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${slackToken}`,
+        Authorization: `Bearer ${googleToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        channel: process.env.SLACK_CHANNEL_ID,
-        text: `New item added: "${params.name}" — qty ${params.quantity}, $${params.price}`,
-      }),
+      body: JSON.stringify({ raw }),
     }).catch(() => {/* non-fatal */})
   }
 
@@ -84,13 +92,13 @@ const coreExecute = async (params: AddItemInput, ctx: MCPToolContext) => {
 // ── Step 2 — Token Vault / OBO ────────────────────────────────────────────────
 //
 // Exchanges the user's MCP access token (On-Behalf-Of / RFC 8693 token
-// exchange) for a federated Slack token stored in Auth0 Token Vault.
-// The resulting Slack token is placed in asyncLocalStorage for coreExecute.
+// exchange) for a federated Google token stored in Auth0 Token Vault.
+// The resulting Google token is placed in asyncLocalStorage for coreExecute.
 //
 const tokenVaultAuthorizer = new TokenVaultAuthorizerBase<ToolArgs>(auth0, {
   store,
-  connection: 'slack',
-  scopes: ['chat:write'],
+  connection: 'google-oauth2',
+  scopes: ['https://www.googleapis.com/auth/gmail.send'],
   // OBO: provide the user's bearer token as the subject token to exchange
   accessToken: (_params, ctx) => ctx.token,
   subjectTokenType: SUBJECT_TOKEN_TYPES.SUBJECT_TYPE_ACCESS_TOKEN,
@@ -122,8 +130,8 @@ const withCIBA = cibaAuthorizer.protect(getContext, withTokenVault)
  *
  *   1. FGA   — verifies `user:<sub> writer inventory:default`
  *   2. CIBA  — requires out-of-band push approval before proceeding
- *   3. OBO   — exchanges user access token for Slack token (Token Vault)
- *   4. Core  — adds the item and posts a Slack notification
+ *   3. OBO   — exchanges user access token for Google token (Token Vault)
+ *   4. Core  — adds the item and sends a Gmail notification
  */
 export async function executeAddItem(params: AddItemInput, ctx: MCPToolContext) {
   // 1. FGA — direct OpenFGA client call; no wrapper needed
