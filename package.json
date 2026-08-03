@@ -1,0 +1,28 @@
+{
+  "name": "inventory-mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^16.2.12",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "mcp-handler": "^2.1.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@auth0/ai": "^6.0.2",
+    "@openfga/sdk": "^0.9.6",
+    "jose": "^6.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

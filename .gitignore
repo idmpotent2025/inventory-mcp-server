@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# production build
+build/
+
+# environment variables — copy .env.example to .env.local and fill in values
+.env
+.env.local
+.env*.local
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+
+# Vercel
+.vercel
