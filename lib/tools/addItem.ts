@@ -30,23 +30,13 @@ type ToolArgs = [AddItemInput, MCPToolContext]
 
 // ── Module-level singletons ───────────────────────────────────────────────────
 //
-// The MemoryStore persists within a warm Vercel instance but resets on cold
-// start. For production, replace with @auth0/ai-redis (Vercel KV / Upstash).
+// MemoryStore is safe to create at module load time (no env var validation).
+// It persists within a warm Vercel instance but resets on cold start.
+// For production, replace with @auth0/ai-redis (Vercel KV / Upstash).
 //
 const store = new MemoryStore()
 
-// Auth0 M2M client config — reads from env at module load time.
-// AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET must be set in Vercel.
-const auth0 = {
-  domain: process.env.AUTH0_DOMAIN ?? '',
-  clientId: process.env.AUTH0_CLIENT_ID ?? '',
-  clientSecret: process.env.AUTH0_CLIENT_SECRET,
-}
-
 // ── Context extractor ─────────────────────────────────────────────────────────
-//
-// Maps MCP tool args to the ToolCallContext expected by @auth0/ai authorizers.
-//
 const getContext = (_params: AddItemInput, ctx: MCPToolContext) => ({
   threadID: ctx.sub,
   toolCallID: ctx.toolCallId,
@@ -89,39 +79,53 @@ const coreExecute = async (params: AddItemInput, ctx: MCPToolContext) => {
   return { success: true, item }
 }
 
-// ── Step 2 — Token Vault / OBO ────────────────────────────────────────────────
+// ── Lazy authorizer chain ─────────────────────────────────────────────────────
 //
-// Exchanges the user's MCP access token (On-Behalf-Of / RFC 8693 token
-// exchange) for a federated Google token stored in Auth0 Token Vault.
-// The resulting Google token is placed in asyncLocalStorage for coreExecute.
+// TokenVaultAuthorizerBase and AsyncAuthorizerBase validate clientId and
+// clientSecret in their constructors. During Vercel's build phase, env vars
+// are not yet available, so they must NOT be instantiated at module load time.
+// getChain() creates them once on the first real request and caches the result.
 //
-const tokenVaultAuthorizer = new TokenVaultAuthorizerBase<ToolArgs>(auth0, {
-  store,
-  connection: 'google-oauth2',
-  scopes: ['https://www.googleapis.com/auth/gmail.send'],
-  // OBO: provide the user's bearer token as the subject token to exchange
-  accessToken: (_params, ctx) => ctx.token,
-  subjectTokenType: SUBJECT_TOKEN_TYPES.SUBJECT_TYPE_ACCESS_TOKEN,
-})
-const withTokenVault = tokenVaultAuthorizer.protect(getContext, coreExecute)
+type Chain = (params: AddItemInput, ctx: MCPToolContext) => Promise<{ success: boolean; item: unknown }>
+let _chain: Chain | null = null
 
-// ── Step 1 wrapper — CIBA step-up ─────────────────────────────────────────────
-//
-// Sends a push notification to the user's device requesting approval.
-// On the first call the tool throws AuthorizationPendingInterrupt — the MCP
-// client should surface this to the user and retry once they approve.
-// `credentialsContext: "thread"` scopes the approval to the user's thread so
-// retries within the same session find the pending/completed request.
-//
-const cibaAuthorizer = new AsyncAuthorizerBase<ToolArgs>(auth0, {
-  store,
-  scopes: ['openid'],
-  userID: (_params, ctx) => ctx.sub,
-  bindingMessage: (params) => `Approve adding "${params.name}" to inventory`,
-  audience: process.env.AUTH0_AUDIENCE,
-  credentialsContext: 'thread',
-})
-const withCIBA = cibaAuthorizer.protect(getContext, withTokenVault)
+function getChain(): Chain {
+  if (_chain) return _chain
+
+  const auth0 = {
+    domain: process.env.AUTH0_DOMAIN ?? '',
+    clientId: process.env.AUTH0_CLIENT_ID ?? '',
+    clientSecret: process.env.AUTH0_CLIENT_SECRET,
+  }
+
+  // Step 2 — Token Vault / OBO
+  // Exchanges the user's MCP access token for a federated Google token stored
+  // in Auth0 Token Vault (RFC 8693 On-Behalf-Of token exchange).
+  const tokenVaultAuthorizer = new TokenVaultAuthorizerBase<ToolArgs>(auth0, {
+    store,
+    connection: 'google-oauth2',
+    scopes: ['https://www.googleapis.com/auth/gmail.send'],
+    accessToken: (_params, ctx) => ctx.token,
+    subjectTokenType: SUBJECT_TOKEN_TYPES.SUBJECT_TYPE_ACCESS_TOKEN,
+  })
+  const withTokenVault = tokenVaultAuthorizer.protect(getContext, coreExecute)
+
+  // Step 1 — CIBA step-up
+  // Sends a push notification to the user's device requesting approval.
+  // Throws AsyncAuthorizationInterrupt on first call; the MCP client retries
+  // after the user approves. credentialsContext: 'thread' scopes the approval
+  // to the user's session so retries find the pending/completed request.
+  const cibaAuthorizer = new AsyncAuthorizerBase<ToolArgs>(auth0, {
+    store,
+    scopes: ['openid'],
+    userID: (_params, ctx) => ctx.sub,
+    bindingMessage: (params) => `Approve adding "${params.name}" to inventory`,
+    audience: process.env.AUTH0_AUDIENCE,
+    credentialsContext: 'thread',
+  })
+  _chain = cibaAuthorizer.protect(getContext, withTokenVault) as Chain
+  return _chain
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -146,5 +150,5 @@ export async function executeAddItem(params: AddItemInput, ctx: MCPToolContext) 
   }
 
   // 2 → 3 → 4: CIBA step-up → TokenVault/OBO → coreExecute
-  return withCIBA(params, ctx)
+  return getChain()(params, ctx)
 }
