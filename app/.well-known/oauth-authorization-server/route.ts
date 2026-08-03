@@ -16,13 +16,19 @@
 import { NextResponse } from 'next/server'
 
 export async function GET() {
-  const auth0Domain = process.env.AUTH0_DOMAIN!
+  const auth0Domain = process.env.AUTH0_DOMAIN
+
+  if (!auth0Domain) {
+    return NextResponse.json(
+      { error: 'AUTH0_DOMAIN environment variable is not configured' },
+      { status: 500 },
+    )
+  }
+
   const upstreamUrl = `https://${auth0Domain}/.well-known/oauth-authorization-server`
 
   const upstream = await fetch(upstreamUrl, {
     headers: { Accept: 'application/json' },
-    // Revalidate at most once per hour
-    next: { revalidate: 3600 },
   })
 
   if (!upstream.ok) {
