@@ -77,3 +77,10 @@ export function updateInvoiceStatus(id: string, status: InvoiceStatus): Invoice 
   invoice.status = status
   return invoice
 }
+
+export function deleteInvoice(id: string): Invoice | null {
+  const invoice = store.get(id)
+  if (!invoice) return null
+  store.delete(id)
+  return invoice
+}

@@ -17,6 +17,7 @@ import { listInvoicesSchema, executeListInvoices } from '@/lib/tools/listInvoice
 import { addInvoiceSchema, executeAddInvoice } from '@/lib/tools/addInvoice'
 import { notifyInvoiceSchema, executeNotifyInvoice } from '@/lib/tools/notifyInvoice'
 import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
+import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
 import type { MCPToolContext } from '@/lib/tools/types'
 
 // ── Auth0 JWT verification ────────────────────────────────────────────────────
@@ -152,7 +153,39 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 4: payInvoice ────────────────────────────────────────────────────
+    // ── Tool 4: deleteInvoice ─────────────────────────────────────────────────
+    // Authorization: bearer token + CIBA push approval.
+    server.registerTool(
+      'deleteInvoice',
+      {
+        title: 'Delete Invoice',
+        description:
+          'Permanently delete an invoice. Requires CIBA push approval on the user\'s device before deletion.',
+        inputSchema: deleteInvoiceSchema,
+      },
+      async (params, ctx) => {
+        const mcpCtx = extractCtx(ctx, 'deleteInvoice')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
+
+        try {
+          const result = await executeDeleteInvoice(params, mcpCtx)
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          }
+        } catch (err: unknown) {
+          // CIBA interrupt — user must approve the push notification and retry
+          if (err instanceof AsyncAuthorizationInterrupt) {
+            return errorResponse(
+              `Authorization pending: ${err.message}. Please approve the request on your device and retry.`,
+            )
+          }
+          const msg = err instanceof Error ? err.message : 'Failed to delete invoice.'
+          return errorResponse(msg)
+        }
+      },
+    )
+
+    // ── Tool 5: payInvoice ────────────────────────────────────────────────────
     // Authorization: bearer token + RFC 8693 OBO token exchange.
     // The user's invoices.widget.com token is exchanged for a
     // payments.widget.com token (payInvoices scope) before processing payment.
