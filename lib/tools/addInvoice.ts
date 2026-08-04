@@ -15,7 +15,7 @@ export type AddInvoiceInput = z.infer<typeof addInvoiceSchema>
  * Executes the addInvoice MCP tool.
  *
  * Authorization:
- *   1. FGA — verifies `user:<sub> writer invoices:default`
+ *   1. FGA — verifies `user:<sub> writer invoices:invoiceA`
  *   2. Core — creates the invoice in the store
  */
 export async function executeAddInvoice(params: AddInvoiceInput, ctx: MCPToolContext) {
