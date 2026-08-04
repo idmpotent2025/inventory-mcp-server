@@ -1,4 +1,4 @@
-# Inventory MCP Server
+# Invoice MCP Server 
 
 A Next.js web app deployed on Vercel that acts as an MCP (Model Context Protocol) server for inventory management. Demonstrates all **Auth0 for MCP** capabilities via the [`@auth0/ai-vercel`](https://github.com/auth0/auth0-ai-js) SDK.
 
