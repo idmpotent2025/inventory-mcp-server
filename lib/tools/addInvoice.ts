@@ -24,7 +24,7 @@ export async function executeAddInvoice(params: AddInvoiceInput, ctx: MCPToolCon
   const { allowed } = await fgaClient.check({
     user: `user:${ctx.sub}`,
     relation: 'writer',
-    object: 'invoices:default',
+    object: 'invoices:invoiceA',
   })
   if (!allowed) {
     throw new Error('Forbidden: you do not have writer access to invoices.')
