@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { AsyncAuthorizerBase } from '@auth0/ai/AsyncAuthorization'
 import { MemoryStore } from '@auth0/ai/stores'
-import { getInvoice, deleteInvoice } from '@/lib/invoices'
+import { deleteInvoice } from '@/lib/invoices'
 import type { MCPToolContext } from './types'
 
 export const deleteInvoiceSchema = z.object({
@@ -71,10 +71,5 @@ function getChain(): Chain {
  *   2. Core — deletes the invoice from the store
  */
 export async function executeDeleteInvoice(params: DeleteInvoiceInput, ctx: MCPToolContext) {
-  // Verify invoice exists before triggering CIBA push
-  if (!getInvoice(params.invoiceId)) {
-    throw new Error(`Invoice "${params.invoiceId}" not found.`)
-  }
-
   return getChain()(params, ctx)
 }
