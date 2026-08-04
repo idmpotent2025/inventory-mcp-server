@@ -193,7 +193,7 @@ const mcpHandler = createMcpHandler(
 
 const authedHandler = withMcpAuth(mcpHandler, verifyToken, {
   required: true,
-  requiredScopes: ['tool:list_vehicles'],
+  requiredScopes: ['tool:list_invoices'],
   resourceUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'https://localhost:3000',
 })
 
