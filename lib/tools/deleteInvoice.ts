@@ -43,6 +43,13 @@ function getChain(): Chain {
     clientSecret: process.env.AUTH0_CLIENT_SECRET,
   }
 
+  console.log('[deleteInvoice] CIBA auth0 config:', {
+    domain: auth0.domain || '⚠️ MISSING',
+    clientId: auth0.clientId ? `${auth0.clientId.slice(0, 6)}…` : '⚠️ MISSING',
+    clientSecret: auth0.clientSecret ? '✓ set' : '⚠️ MISSING',
+    audience: process.env.AUTH0_AUDIENCE || '⚠️ MISSING',
+  })
+
   // CIBA step-up: sends a push notification to the user's device requiring
   // explicit approval before the invoice is permanently deleted.
   // Throws AsyncAuthorizationInterrupt on first call; the MCP client retries
@@ -71,5 +78,10 @@ function getChain(): Chain {
  *   2. Core — deletes the invoice from the store
  */
 export async function executeDeleteInvoice(params: DeleteInvoiceInput, ctx: MCPToolContext) {
+  console.log('[deleteInvoice] called with:', {
+    invoiceId: params.invoiceId,
+    sub: ctx.sub,
+    tokenPresent: !!ctx.token,
+  })
   return getChain()(params, ctx)
 }
