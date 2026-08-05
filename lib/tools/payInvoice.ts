@@ -28,7 +28,7 @@ async function exchangeTokenForPayments(subjectToken: string): Promise<string> {
     client_id: clientId,
     client_secret: clientSecret,
     subject_token: subjectToken,
-    subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+    subject_token_type: 'cloud.oktademo.redsalsa.mcpserverclient:access_token',
     audience: 'payments.widget.com',
     scope: 'payInvoices',
   })
