@@ -74,7 +74,8 @@ export async function executePayInvoice(params: PayInvoiceInput, ctx: MCPToolCon
 
   // In production: POST to payments service using `paymentsToken` as Bearer.
   // Here we simulate a successful charge and mark the invoice paid.
-  void paymentsToken
+  // DEBUG: log exchanged token so it can be inspected at jwt.io via Vercel logs
+  console.log('[payInvoice] exchanged payments token:', paymentsToken)
 
   const updated = updateInvoiceStatus(params.invoiceId, 'paid')
   return {
