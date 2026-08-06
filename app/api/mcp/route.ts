@@ -15,7 +15,7 @@ import { AsyncAuthorizationInterrupt } from '@auth0/ai/interrupts'
 
 import { listInvoicesSchema, executeListInvoices } from '@/lib/tools/listInvoices'
 import { addInvoiceSchema, executeAddInvoice } from '@/lib/tools/addInvoice'
-import { notifyInvoiceSchema, executeNotifyInvoice } from '@/lib/tools/notifyInvoice'
+import { notifyViaGmailSchema, executeNotifyViaGmail } from '@/lib/tools/notifyInvoice'
 import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
 import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
 import type { MCPToolContext } from '@/lib/tools/types'
@@ -119,24 +119,25 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 3: notifyInvoice ─────────────────────────────────────────────────
-    // Authorization: bearer token + Auth0 Token Vault OBO (Google gmail.send +
-    //               calendar.events scopes via google-oauth2 connection).
+    // ── Tool 3: notifyViaGmail ────────────────────────────────────────────────
+    // Authorization: bearer token + Auth0 Token Vault OBO (Google gmail.send
+    //               scope via google-oauth2 connection).
     server.registerTool(
-      'notifyInvoice',
+      'notifyViaGmail',
       {
-        title: 'Notify Invoice',
+        title: 'Notify Via Gmail',
         description:
-          'Send an invoice notification via Gmail email or add a Google Calendar reminder on the ' +
-          'due date. Uses Auth0 Token Vault to obtain the user\'s Google credentials (OBO).',
-        inputSchema: notifyInvoiceSchema,
+          'Send an invoice notification email via Gmail. Uses Auth0 Token Vault to obtain ' +
+          'the user\'s Google credentials (OBO). Recipient is taken from the email claim ' +
+          'in the user\'s access token.',
+        inputSchema: notifyViaGmailSchema,
       },
       async (params, ctx) => {
-        const mcpCtx = extractCtx(ctx, 'notifyInvoice')
+        const mcpCtx = extractCtx(ctx, 'notifyViaGmail')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
-          const result = await executeNotifyInvoice(params, mcpCtx)
+          const result = await executeNotifyViaGmail(params, mcpCtx)
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
@@ -147,7 +148,7 @@ const mcpHandler = createMcpHandler(
               `Authorization pending: ${err.message}. Please approve the Google authorization request and retry.`,
             )
           }
-          const msg = err instanceof Error ? err.message : 'Failed to send notification.'
+          const msg = err instanceof Error ? err.message : 'Failed to send Gmail notification.'
           return errorResponse(msg)
         }
       },
