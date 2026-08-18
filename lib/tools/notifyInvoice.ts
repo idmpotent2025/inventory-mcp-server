@@ -105,8 +105,8 @@ function getChain(): Chain {
 
   const auth0 = {
     domain: process.env.AUTH0_DOMAIN ?? '',
-    clientId: process.env.AUTH0_TOKEN_EXCHANGE_CLIENT_ID ?? '',
-    clientSecret: process.env.AUTH0_TOKEN_EXCHANGE_CLIENT_SECRET,
+    clientId: process.env.AUTH0_CLIENT_ID ?? '',
+    clientSecret: process.env.AUTH0_CLIENT_SECRET,
   }
 
   // RFC 8693 OBO: exchange user's MCP token for a Google token stored in
