@@ -18,6 +18,7 @@ import { addInvoiceSchema, executeAddInvoice } from '@/lib/tools/addInvoice'
 import { notifyViaGmailSchema, executeNotifyViaGmail } from '@/lib/tools/notifyInvoice'
 import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
 import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
+import { helpSchema, executeHelp } from '@/lib/tools/help'
 import type { MCPToolContext } from '@/lib/tools/types'
 
 // ── Auth0 JWT verification ────────────────────────────────────────────────────
@@ -211,6 +212,25 @@ const mcpHandler = createMcpHandler(
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to pay invoice.'
           return errorResponse(msg)
+        }
+      },
+    )
+    // ── Tool 6: help ─────────────────────────────────────────────────────────────
+    // No authorization required — returns a plain-text guide to all available tools.
+    // Triggered when the user types /help in their AI client.
+    server.registerTool(
+      'help',
+      {
+        title: 'Help',
+        description:
+          'Show all available tools and how to use this agent. ' +
+          'Call this tool when the user types /help or asks what this agent can do.',
+        inputSchema: helpSchema,
+      },
+      async (params) => {
+        const result = executeHelp(params)
+        return {
+          content: [{ type: 'text' as const, text: result.text }],
         }
       },
     )
