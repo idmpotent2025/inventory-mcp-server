@@ -26,6 +26,8 @@ import type { MCPToolContext } from '@/lib/tools/types'
 const domain = process.env.AUTH0_DOMAIN!
 const audience = process.env.AUTH0_AUDIENCE!
 
+console.log('[mcp] config — domain:', domain, '| audience:', audience)
+
 // Cache the JWKS remote key set (re-used across warm invocations)
 const jwks = createRemoteJWKSet(new URL(`https://${domain}/.well-known/jwks.json`))
 
@@ -33,19 +35,27 @@ async function verifyToken(
   _req: Request,
   bearerToken?: string,
 ): Promise<AuthInfo | undefined> {
-  if (!bearerToken) return undefined
+  if (!bearerToken) {
+    console.warn('[mcp/verifyToken] no bearer token — rejecting')
+    return undefined
+  }
+  console.log('[mcp/verifyToken] token prefix:', bearerToken.slice(0, 20) + '…')
+  console.log('[mcp/verifyToken] checking issuer:', `https://${domain}/`, '| audience:', audience)
   try {
     const { payload } = await jwtVerify(bearerToken, jwks, {
       issuer: `https://${domain}/`,
       audience,
     })
+    const scopes = ((payload.scope as string) ?? '').split(' ').filter(Boolean)
+    console.log('[mcp/verifyToken] ✓ valid — sub:', payload.sub, '| scopes:', scopes.join(' '))
     return {
       token: bearerToken,
       clientId: (payload.azp as string | undefined) ?? '',
-      scopes: ((payload.scope as string) ?? '').split(' ').filter(Boolean),
+      scopes,
       extra: { sub: payload.sub, ...payload } as Record<string, unknown>,
     }
-  } catch {
+  } catch (err) {
+    console.error('[mcp/verifyToken] ✗ failed:', err instanceof Error ? err.message : String(err))
     return undefined
   }
 }
@@ -60,7 +70,11 @@ function extractCtx(
   const authInfo = ctx.http?.authInfo
   const sub = authInfo?.extra?.['sub'] as string | undefined
   const token = authInfo?.token
-  if (!sub || !token) return null
+  if (!sub || !token) {
+    console.warn(`[mcp/${toolName}] extractCtx — missing sub or token, authInfo:`, JSON.stringify(authInfo ?? null))
+    return null
+  }
+  console.log(`[mcp/${toolName}] extractCtx — sub: ${sub} | scopes:`, authInfo?.scopes?.join(' '))
   return { sub, token, toolCallId: `mcp-${toolName}-${Date.now()}` }
 }
 
@@ -87,7 +101,9 @@ const mcpHandler = createMcpHandler(
         inputSchema: listInvoicesSchema,
       },
       async (params) => {
+        console.log('[mcp/listInvoices] called — params:', JSON.stringify(params))
         const result = await executeListInvoices(params)
+        console.log('[mcp/listInvoices] returning', Array.isArray(result) ? result.length : '?', 'items')
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
         }
@@ -105,16 +121,19 @@ const mcpHandler = createMcpHandler(
         inputSchema: addInvoiceSchema,
       },
       async (params, ctx) => {
+        console.log('[mcp/addInvoice] called — params:', JSON.stringify(params))
         const mcpCtx = extractCtx(ctx, 'addInvoice')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
           const result = await executeAddInvoice(params, mcpCtx)
+          console.log('[mcp/addInvoice] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to add invoice.'
+          console.error('[mcp/addInvoice] error:', msg)
           return errorResponse(msg)
         }
       },
@@ -134,22 +153,26 @@ const mcpHandler = createMcpHandler(
         inputSchema: notifyViaGmailSchema,
       },
       async (params, ctx) => {
+        console.log('[mcp/notifyViaGmail] called — params:', JSON.stringify(params))
         const mcpCtx = extractCtx(ctx, 'notifyViaGmail')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
           const result = await executeNotifyViaGmail(params, mcpCtx)
+          console.log('[mcp/notifyViaGmail] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
           // Token Vault interrupt — user must authorize Google scopes and retry
           if (err instanceof AsyncAuthorizationInterrupt) {
+            console.warn('[mcp/notifyViaGmail] Token Vault interrupt:', err.message)
             return errorResponse(
               `Authorization pending: ${err.message}. Please approve the Google authorization request and retry.`,
             )
           }
           const msg = err instanceof Error ? err.message : 'Failed to send Gmail notification.'
+          console.error('[mcp/notifyViaGmail] error:', msg)
           return errorResponse(msg)
         }
       },
@@ -166,22 +189,26 @@ const mcpHandler = createMcpHandler(
         inputSchema: deleteInvoiceSchema,
       },
       async (params, ctx) => {
+        console.log('[mcp/deleteInvoice] called — params:', JSON.stringify(params))
         const mcpCtx = extractCtx(ctx, 'deleteInvoice')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
           const result = await executeDeleteInvoice(params, mcpCtx)
+          console.log('[mcp/deleteInvoice] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
           // CIBA interrupt — user must approve the push notification and retry
           if (err instanceof AsyncAuthorizationInterrupt) {
+            console.warn('[mcp/deleteInvoice] CIBA interrupt:', err.message)
             return errorResponse(
               `Authorization pending: ${err.message}. Please approve the request on your device and retry.`,
             )
           }
           const msg = err instanceof Error ? err.message : 'Failed to delete invoice.'
+          console.error('[mcp/deleteInvoice] error:', msg)
           return errorResponse(msg)
         }
       },
@@ -201,16 +228,19 @@ const mcpHandler = createMcpHandler(
         inputSchema: payInvoiceSchema,
       },
       async (params, ctx) => {
+        console.log('[mcp/payInvoice] called — params:', JSON.stringify(params))
         const mcpCtx = extractCtx(ctx, 'payInvoice')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
           const result = await executePayInvoice(params, mcpCtx)
+          console.log('[mcp/payInvoice] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to pay invoice.'
+          console.error('[mcp/payInvoice] error:', msg)
           return errorResponse(msg)
         }
       },
