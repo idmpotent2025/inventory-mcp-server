@@ -21,7 +21,7 @@ export async function GET() {
   const metadata = {
     resource: resourceUrl,
     authorization_servers: [`https://${auth0Domain}`],
-    scopes_supported: ['tool:list_vehicles'],
+    scopes_supported: ['tool:list_invoices'],
     bearer_methods_supported: ['header'],
   }
 
