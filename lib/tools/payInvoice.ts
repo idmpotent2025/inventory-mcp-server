@@ -2,6 +2,26 @@ import { z } from 'zod'
 import { getInvoice, updateInvoiceStatus } from '@/lib/invoices'
 import type { MCPToolContext } from './types'
 
+function decodeJwtClaims(jwt: string): Record<string, unknown> {
+  try {
+    return JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString())
+  } catch {
+    return { error: 'failed to decode' }
+  }
+}
+
+function logTokenClaims(label: string, jwt: string) {
+  const c = decodeJwtClaims(jwt)
+  console.log(`[payInvoice] ${label} claims:`, JSON.stringify({
+    iss: c.iss,
+    aud: c.aud,
+    sub: c.sub,
+    scope: c.scope,
+    exp: c.exp,
+    azp: c.azp,
+  }))
+}
+
 export const payInvoiceSchema = z.object({
   invoiceId: z.string().describe('ID of the invoice to pay (e.g. inv-001)'),
 })
@@ -33,6 +53,8 @@ async function exchangeTokenForPayments(subjectToken: string): Promise<string> {
     scope: 'payInvoices',
   })
 
+  console.log('[payInvoice] token exchange request — audience: payments.widget.com | scope: payInvoices | domain:', domain)
+
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -41,10 +63,12 @@ async function exchangeTokenForPayments(subjectToken: string): Promise<string> {
 
   if (!res.ok) {
     const err = await res.text()
+    console.error('[payInvoice] token exchange failed — status:', res.status, '| body:', err)
     throw new Error(`Token exchange failed (payments.widget.com): ${err}`)
   }
 
   const data = (await res.json()) as { access_token: string }
+  console.log('[payInvoice] token exchange succeeded — status:', res.status)
   return data.access_token
 }
 
@@ -69,13 +93,14 @@ export async function executePayInvoice(params: PayInvoiceInput, ctx: MCPToolCon
     }
   }
 
+  // Log incoming token claims before the exchange
+  logTokenClaims('incoming', ctx.token)
+
   // Exchange the user's token for a payments-scoped token
   const paymentsToken = await exchangeTokenForPayments(ctx.token)
 
-  // In production: POST to payments service using `paymentsToken` as Bearer.
-  // Here we simulate a successful charge and mark the invoice paid.
-  // DEBUG: log exchanged token so it can be inspected at jwt.io via Vercel logs
-  console.log('[payInvoice] exchanged payments token:', paymentsToken)
+  // Log the exchanged token claims
+  logTokenClaims('exchanged (payments)', paymentsToken)
 
   const updated = updateInvoiceStatus(params.invoiceId, 'paid')
   return {
