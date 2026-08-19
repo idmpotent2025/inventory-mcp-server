@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import { AsyncAuthorizerBase } from '@auth0/ai/AsyncAuthorization'
-import { MemoryStore } from '@auth0/ai/stores'
 import { deleteInvoice } from '@/lib/invoices'
 import type { MCPToolContext } from './types'
 
@@ -9,62 +7,100 @@ export const deleteInvoiceSchema = z.object({
 })
 
 export type DeleteInvoiceInput = z.infer<typeof deleteInvoiceSchema>
-type ToolArgs = [DeleteInvoiceInput, MCPToolContext]
 
-// ── Module-level store (safe at module load — no env vars needed) ──────────────
-const store = new MemoryStore()
+// ── CIBA: initiate push notification ─────────────────────────────────────────
 
-// ── Context extractor ─────────────────────────────────────────────────────────
-const getContext = (_params: DeleteInvoiceInput, ctx: MCPToolContext) => ({
-  threadID: ctx.sub,
-  toolCallID: ctx.toolCallId,
-  toolName: 'deleteInvoice',
-})
+async function initiateCIBA(
+  ctx: MCPToolContext,
+  bindingMessage: string,
+): Promise<{ authReqId: string; interval: number }> {
+  const domain = process.env.AUTH0_DOMAIN!
+  const clientId = process.env.AUTH0_CLIENT_ID!
+  const clientSecret = process.env.AUTH0_CLIENT_SECRET!
+  const audience = process.env.AUTH0_AUDIENCE!
 
-// ── Core execution ────────────────────────────────────────────────────────────
-const coreExecute = async (params: DeleteInvoiceInput, _ctx: MCPToolContext) => {
-  const deleted = deleteInvoice(params.invoiceId)
-  if (!deleted) {
-    throw new Error(`Invoice "${params.invoiceId}" not found.`)
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    login_hint: JSON.stringify({ format: 'iss_sub', iss: `https://${domain}/`, sub: ctx.sub }),
+    scope: 'openid',
+    audience,
+    binding_message: bindingMessage,
+    request_expiry: '120',
+  })
+
+  console.log('[deleteInvoice] initiating CIBA — sub:', ctx.sub, '| message:', bindingMessage)
+
+  const res = await fetch(`https://${domain}/bc-authorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    console.error('[deleteInvoice] CIBA initiation failed — status:', res.status, '| body:', err)
+    throw new Error(`CIBA initiation failed: ${err}`)
   }
-  return { success: true, deleted }
+
+  const data = (await res.json()) as { auth_req_id: string; expires_in?: number; interval?: number }
+  console.log('[deleteInvoice] CIBA initiated — auth_req_id:', data.auth_req_id, '| interval:', data.interval ?? 5)
+  return { authReqId: data.auth_req_id, interval: data.interval ?? 5 }
 }
 
-// ── Lazy authorizer chain ─────────────────────────────────────────────────────
-type Chain = (params: DeleteInvoiceInput, ctx: MCPToolContext) => Promise<unknown>
-let _chain: Chain | null = null
+// ── CIBA: poll until approved / rejected / expired ────────────────────────────
+// Polls inline so the caller gets a result in a single MCP call — no client
+// retry or server-side state store required.
 
-function getChain(): Chain {
-  if (_chain) return _chain
+async function pollForApproval(authReqId: string, intervalSeconds: number): Promise<void> {
+  const domain = process.env.AUTH0_DOMAIN!
+  const clientId = process.env.AUTH0_CLIENT_ID!
+  const clientSecret = process.env.AUTH0_CLIENT_SECRET!
 
-  const auth0 = {
-    domain: process.env.AUTH0_DOMAIN ?? '',
-    clientId: process.env.AUTH0_CLIENT_ID ?? '',
-    clientSecret: process.env.AUTH0_CLIENT_SECRET,
+  const deadline = Date.now() + 50_000 // stay within Vercel's 55s maxDuration
+  let pollMs = intervalSeconds * 1000
+
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, pollMs))
+
+    const body = new URLSearchParams({
+      grant_type: 'urn:openid:params:grant-type:ciba',
+      auth_req_id: authReqId,
+      client_id: clientId,
+      client_secret: clientSecret,
+    })
+
+    const res = await fetch(`https://${domain}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    })
+
+    const data = (await res.json()) as { error?: string; access_token?: string }
+
+    if (res.ok) {
+      console.log('[deleteInvoice] CIBA approved')
+      return
+    }
+
+    const { error } = data
+    if (error === 'authorization_pending') {
+      console.log('[deleteInvoice] CIBA pending — next poll in', pollMs / 1000, 's')
+      continue
+    } else if (error === 'slow_down') {
+      pollMs += 5_000
+      console.log('[deleteInvoice] CIBA slow_down — new interval:', pollMs / 1000, 's')
+      continue
+    } else if (error === 'access_denied') {
+      throw new Error('Authorization denied: the push notification was rejected.')
+    } else if (error === 'expired_token') {
+      throw new Error('Authorization expired: the push notification was not approved in time.')
+    } else {
+      throw new Error(`CIBA poll error: ${JSON.stringify(data)}`)
+    }
   }
 
-  console.log('[deleteInvoice] CIBA auth0 config:', {
-    domain: auth0.domain || '⚠️ MISSING',
-    clientId: auth0.clientId ? `${auth0.clientId.slice(0, 6)}…` : '⚠️ MISSING',
-    clientSecret: auth0.clientSecret ? '✓ set' : '⚠️ MISSING',
-    audience: process.env.AUTH0_AUDIENCE || '⚠️ MISSING',
-  })
-
-  // CIBA step-up: sends a push notification to the user's device requiring
-  // explicit approval before the invoice is permanently deleted.
-  // Throws AsyncAuthorizationInterrupt on first call; the MCP client retries
-  // after the user approves on their device.
-  const cibaAuthorizer = new AsyncAuthorizerBase<ToolArgs>(auth0, {
-    store,
-    scopes: ['openid'],
-    userID: (_params, ctx) => ctx.sub,
-    bindingMessage: (params) => `Approve deletion of invoice ${params.invoiceId}`,
-    audience: process.env.AUTH0_AUDIENCE,
-    credentialsContext: 'thread',
-  })
-
-  _chain = cibaAuthorizer.protect(getContext, coreExecute) as Chain
-  return _chain
+  throw new Error('Authorization timed out: please try again and approve the push notification promptly.')
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -73,9 +109,9 @@ function getChain(): Chain {
  * Executes the deleteInvoice MCP tool.
  *
  * Authorization:
- *   1. CIBA — sends push notification; throws AsyncAuthorizationInterrupt
- *             until the user approves on their device
- *   2. Core — deletes the invoice from the store
+ *   1. CIBA — sends push notification to the user's device and polls
+ *             Auth0 inline until approved or rejected. No client retry needed.
+ *   2. Core — deletes the invoice once approved.
  */
 export async function executeDeleteInvoice(params: DeleteInvoiceInput, ctx: MCPToolContext) {
   console.log('[deleteInvoice] called with:', {
@@ -83,5 +119,16 @@ export async function executeDeleteInvoice(params: DeleteInvoiceInput, ctx: MCPT
     sub: ctx.sub,
     tokenPresent: !!ctx.token,
   })
-  return getChain()(params, ctx)
+
+  // Sends push notification and blocks until approved, rejected, or timed out
+  const { authReqId, interval } = await initiateCIBA(
+    ctx,
+    `Approve deletion of invoice ${params.invoiceId}`,
+  )
+  await pollForApproval(authReqId, interval)
+
+  const deleted = deleteInvoice(params.invoiceId)
+  if (!deleted) throw new Error(`Invoice "${params.invoiceId}" not found.`)
+
+  return { success: true, deleted }
 }

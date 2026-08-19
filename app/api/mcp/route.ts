@@ -6,7 +6,11 @@
  *   2. FGA           — addInvoice checks writer relation in Auth0 FGA
  *   3. Token Vault   — notifyInvoice exchanges user token for Google token (OBO)
  *   4. RFC 8693 OBO  — payInvoice exchanges invoices.widget.com token for payments.widget.com token
+ *   5. CIBA          — deleteInvoice sends push notification and polls inline (no client retry)
  */
+
+// Allow 55s: deleteInvoice polls Auth0 inline while the user approves the push
+export const maxDuration = 55
 
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import type { AuthInfo } from '@modelcontextprotocol/server'
@@ -204,13 +208,6 @@ const mcpHandler = createMcpHandler(
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
-          // CIBA interrupt — user must approve the push notification and retry
-          if (err instanceof AsyncAuthorizationInterrupt) {
-            console.warn('[mcp/deleteInvoice] CIBA interrupt:', err.message)
-            return errorResponse(
-              `Authorization pending: ${err.message}. Please approve the request on your device and retry.`,
-            )
-          }
           const msg = err instanceof Error ? err.message : 'Failed to delete invoice.'
           console.error('[mcp/deleteInvoice] error:', msg)
           return errorResponse(msg)
