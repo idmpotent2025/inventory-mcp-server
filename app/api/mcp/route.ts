@@ -54,7 +54,7 @@ async function verifyToken(
       audience,
     })
     const scopes = ((payload.scope as string) ?? '').split(' ').filter(Boolean)
-    console.log('[mcp/verifyToken] ✓ valid — sub:', payload.sub, '| scopes:', scopes.join(' '))
+    console.log('[mcp/verifyToken] ✓ valid — sub:', payload.sub, '| azp:', payload.azp, '| scopes:', scopes.join(' '))
     return {
       token: bearerToken,
       clientId: (payload.azp as string | undefined) ?? '',
