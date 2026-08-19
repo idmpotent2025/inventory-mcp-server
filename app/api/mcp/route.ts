@@ -40,6 +40,10 @@ async function verifyToken(
     return undefined
   }
   console.log('[mcp/verifyToken] token prefix:', bearerToken.slice(0, 20) + '…')
+  try {
+    const rawPayload = JSON.parse(Buffer.from(bearerToken.split('.')[1], 'base64url').toString())
+    console.log('[mcp/verifyToken] token iss:', rawPayload.iss, '| aud:', rawPayload.aud)
+  } catch { /* ignore decode errors */ }
   console.log('[mcp/verifyToken] checking issuer:', `https://${domain}/`, '| audience:', audience)
   try {
     const { payload } = await jwtVerify(bearerToken, jwks, {
