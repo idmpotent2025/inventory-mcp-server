@@ -15,7 +15,6 @@ export const maxDuration = 55
 import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import type { AuthInfo } from '@modelcontextprotocol/server'
 import { jwtVerify, createRemoteJWKSet } from 'jose'
-import { AsyncAuthorizationInterrupt } from '@auth0/ai/interrupts'
 
 import { listInvoicesSchema, executeListInvoices } from '@/lib/tools/listInvoices'
 import { addInvoiceSchema, executeAddInvoice } from '@/lib/tools/addInvoice'
@@ -172,11 +171,10 @@ const mcpHandler = createMcpHandler(
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
-          // Token Vault interrupt — user must authorize Google scopes and retry
-          if (err instanceof AsyncAuthorizationInterrupt) {
-            console.warn('[mcp/notifyViaGmail] Token Vault interrupt:', err.message)
+          if (err instanceof Error && err.message === 'GMAIL_NOT_CONNECTED') {
+            console.warn('[mcp/notifyViaGmail] no vaulted Google token — user must connect Gmail')
             return errorResponse(
-              `Authorization pending: ${err.message}. Please approve the Google authorization request and retry.`,
+              'Gmail not connected: please go to Settings → Connect Gmail in the Portal and authorize access, then retry.',
             )
           }
           const msg = err instanceof Error ? err.message : 'Failed to send Gmail notification.'
