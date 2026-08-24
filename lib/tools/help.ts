@@ -12,7 +12,9 @@ Invoice MCP Server — available tools:
 • notifyViaGmail     Send an invoice notification email via the user's Gmail account (Auth0 Token Vault OBO).
 • payInvoice         Mark an invoice as paid (RFC 8693 token exchange for payments scope).
 • deleteInvoice      Permanently delete an invoice after CIBA push approval on the user's device.
-• help               Show this message.
+• help               Show this message (no login required).
+
+To invoke any tool other than help, you must be logged in to the portal. Please sign in and then retry your request.
 
 Tip: most mutations require Auth0 authorization (FGA, Token Vault, or CIBA). If you see an "Authorization pending" response, follow the prompt to approve and then retry the same command.
 `.trim()

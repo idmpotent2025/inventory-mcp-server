@@ -107,8 +107,11 @@ const mcpHandler = createMcpHandler(
         description: 'List invoices. Optionally filter by status: draft, pending, paid, or overdue.',
         inputSchema: listInvoicesSchema,
       },
-      async (params) => {
+      async (params, ctx) => {
         console.log('[mcp/listInvoices] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'listInvoices')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity. Please log in to the portal to use this tool.')
+
         const result = await executeListInvoices(params)
         console.log('[mcp/listInvoices] returning', Array.isArray(result) ? result.length : '?', 'items')
         return {
@@ -275,7 +278,7 @@ const mcpHandler = createMcpHandler(
 // ── Wrap with Auth0 JWT bearer token verification ─────────────────────────────
 
 const authedHandler = withMcpAuth(mcpHandler, verifyToken, {
-  required: true,
+  required: false,
   resourceUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'https://localhost:3000',
 })
 
