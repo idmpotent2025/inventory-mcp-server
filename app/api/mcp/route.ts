@@ -22,6 +22,7 @@ import { notifyViaGmailSchema, executeNotifyViaGmail } from '@/lib/tools/notifyI
 import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
 import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
 import { helpSchema, executeHelp } from '@/lib/tools/help'
+import { rollbackDeleteSchema, executeRollbackDelete } from '@/lib/tools/rollbackDelete'
 import type { MCPToolContext } from '@/lib/tools/types'
 
 // ── Auth0 JWT verification ────────────────────────────────────────────────────
@@ -261,6 +262,30 @@ const mcpHandler = createMcpHandler(
       },
       async (params) => {
         const result = executeHelp(params)
+        return {
+          content: [{ type: 'text' as const, text: result.text }],
+        }
+      },
+    )
+
+    // ── Tool 7: rollbackDelete ────────────────────────────────────────────────
+    // Plain vanilla tool — no CIBA/FGA/Token Exchange.
+    // Restores all invoices deleted in this warm instance (test reset utility).
+    server.registerTool(
+      'rollbackDelete',
+      {
+        title: 'Rollback Delete',
+        description:
+          'Restore all previously deleted invoices in this server instance. ' +
+          'Use this to reset test state after running deleteInvoice.',
+        inputSchema: rollbackDeleteSchema,
+      },
+      async (_params, ctx) => {
+        const mcpCtx = extractCtx(ctx, 'rollbackDelete')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity. Please log in to use this tool.')
+
+        const result = executeRollbackDelete()
+        console.log('[mcp/rollbackDelete] result:', result.text)
         return {
           content: [{ type: 'text' as const, text: result.text }],
         }

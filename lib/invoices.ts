@@ -13,6 +13,8 @@ export interface Invoice {
   status: InvoiceStatus
 }
 
+const deletedStore = new Map<string, Invoice>()
+
 const store = new Map<string, Invoice>([
   ['inv-001', {
     id: 'inv-001',
@@ -81,6 +83,17 @@ export function updateInvoiceStatus(id: string, status: InvoiceStatus): Invoice 
 export function deleteInvoice(id: string): Invoice | null {
   const invoice = store.get(id)
   if (!invoice) return null
+  deletedStore.set(id, invoice)
   store.delete(id)
   return invoice
+}
+
+export function rollbackDelete(): Invoice[] {
+  const restored: Invoice[] = []
+  for (const [id, invoice] of deletedStore) {
+    store.set(id, invoice)
+    restored.push(invoice)
+  }
+  deletedStore.clear()
+  return restored
 }
