@@ -1,10 +1,7 @@
+import { z } from 'zod'
 import { rollbackDelete } from '@/lib/invoices'
 
-export const rollbackDeleteSchema = {
-  type: 'object' as const,
-  properties: {},
-  required: [],
-}
+export const rollbackDeleteSchema = z.object({})
 
 export function executeRollbackDelete(): { text: string } {
   const restored = rollbackDelete()
