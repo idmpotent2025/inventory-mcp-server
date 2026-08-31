@@ -23,6 +23,10 @@ import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
 import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
 import { helpSchema, executeHelp } from '@/lib/tools/help'
 import { rollbackDeleteSchema, executeRollbackDelete } from '@/lib/tools/rollbackDelete'
+import { listMembersSchema, executeListMembers } from '@/lib/tools/listMembers'
+import { inviteMemberSchema, executeInviteMember } from '@/lib/tools/inviteMember'
+import { resetPasswordSchema, executeResetPassword } from '@/lib/tools/resetPassword'
+import { deactivateMemberSchema, executeDeactivateMember } from '@/lib/tools/deactivateMember'
 import type { MCPToolContext } from '@/lib/tools/types'
 
 // ── Auth0 JWT verification ────────────────────────────────────────────────────
@@ -288,6 +292,120 @@ const mcpHandler = createMcpHandler(
         console.log('[mcp/rollbackDelete] result:', result.text)
         return {
           content: [{ type: 'text' as const, text: result.text }],
+        }
+      },
+    )
+
+    // ── Delegated Admin Tools ─────────────────────────────────────────────────
+
+    // ── Tool 8: listMembers ───────────────────────────────────────────────────
+    // Authorization: bearer token only (same as listInvoices).
+    server.registerTool(
+      'listMembers',
+      {
+        title: 'List Members',
+        description: 'List portal members. Filter by status: active, inactive, or invited.',
+        inputSchema: listMembersSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/listMembers] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'listMembers')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity. Please log in to use this tool.')
+
+        const result = await executeListMembers(params)
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        }
+      },
+    )
+
+    // ── Tool 9: inviteMember ──────────────────────────────────────────────────
+    // Authorization: bearer token + FGA writer check on `members:default`.
+    server.registerTool(
+      'inviteMember',
+      {
+        title: 'Invite Member',
+        description:
+          'Invite a new member to the portal. ' +
+          'Requires FGA writer permission on members:default.',
+        inputSchema: inviteMemberSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/inviteMember] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'inviteMember')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
+
+        try {
+          const result = await executeInviteMember(params, mcpCtx)
+          console.log('[mcp/inviteMember] success — result:', JSON.stringify(result))
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to invite member.'
+          console.error('[mcp/inviteMember] error:', msg)
+          return errorResponse(msg)
+        }
+      },
+    )
+
+    // ── Tool 10: resetPassword ────────────────────────────────────────────────
+    // Authorization: bearer token + CIBA push approval.
+    server.registerTool(
+      'resetPassword',
+      {
+        title: 'Reset Password',
+        description:
+          "Reset a member's password. Requires CIBA push approval from your device before the reset link is sent.",
+        inputSchema: resetPasswordSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/resetPassword] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'resetPassword')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
+
+        try {
+          const result = await executeResetPassword(params, mcpCtx)
+          console.log('[mcp/resetPassword] success — result:', JSON.stringify(result))
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to reset password.'
+          console.error('[mcp/resetPassword] error:', msg)
+          return errorResponse(msg)
+        }
+      },
+    )
+
+    // ── Tool 11: deactivateMember ─────────────────────────────────────────────
+    // Authorization: bearer token + RFC 8693 OBO token exchange.
+    // The user's portal token is exchanged for an admin.widget.com token
+    // (deactivateMembers scope) before marking the member inactive.
+    server.registerTool(
+      'deactivateMember',
+      {
+        title: 'Deactivate Member',
+        description:
+          'Deactivate a portal member. Uses RFC 8693 On-Behalf-Of token exchange to obtain an ' +
+          'admin.widget.com token (deactivateMembers scope) before deactivating.',
+        inputSchema: deactivateMemberSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/deactivateMember] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'deactivateMember')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
+
+        try {
+          const result = await executeDeactivateMember(params, mcpCtx)
+          console.log('[mcp/deactivateMember] success — result:', JSON.stringify(result))
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to deactivate member.'
+          console.error('[mcp/deactivateMember] error:', msg)
+          return errorResponse(msg)
         }
       },
     )
