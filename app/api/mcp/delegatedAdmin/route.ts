@@ -12,8 +12,8 @@
  *
  * Role claim setup: add a Post Login Action in Auth0 that sets:
  *   api.accessToken.setCustomClaim(
- *     'https://globalpartnerportal.com/roles',
- *     event.authorization?.roles ?? []
+ *     'https://portal.auth.tamirsa.com/org_role',
+ *     event.organization?.metadata?.role ? [event.organization.metadata.role] : (event.authorization?.roles ?? [])
  *   )
  */
 
@@ -34,7 +34,7 @@ const domain = process.env.AUTH0_DOMAIN!
 const audience = process.env.AUTH0_AUDIENCE!
 
 // Must match the claim key set by the Auth0 Post Login Action above.
-const ROLES_CLAIM = 'https://globalpartnerportal.com/roles'
+const ROLES_CLAIM = 'https://portal.auth.tamirsa.com/org_role'
 
 console.log('[mcp/delegatedAdmin] config — domain:', domain, '| audience:', audience)
 

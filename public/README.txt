@@ -60,8 +60,8 @@ ROUTES
       TeamAgent endpoint. Member management domain only (5 tools: help,
       listMembers, inviteMember, resetPassword, deactivateMember). Every
       tool except /help additionally enforces the org_admin role from the
-      https://globalpartnerportal.com/roles JWT claim (set via Auth0 Post
-      Login Action). Used by the GlobalPartnerPortal TeamAgent page.
+      https://portal.auth.tamirsa.com/org_role JWT claim (set via Auth0
+      Post Login Action). Used by the GlobalPartnerPortal TeamAgent page.
       maxDuration = 55 (inline CIBA polling).
 
   GET  /.well-known/oauth-authorization-server
