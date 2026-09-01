@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { rollbackDelete } from '@/lib/invoices'
 
-export const rollbackDeleteSchema = z.object({})
+export const rollbackDeleteInvoiceSchema = z.object({})
 
-export function executeRollbackDelete(): { text: string } {
+export function executeRollbackDeleteInvoice(): { text: string } {
   const restored = rollbackDelete()
   if (restored.length === 0) {
     return { text: 'No deleted invoices to restore.' }
