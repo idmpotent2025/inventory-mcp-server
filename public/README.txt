@@ -2,10 +2,12 @@
   MCP SERVER DEMO — Auth0 CIAM Patterns for the Model Context Protocol
 ================================================================================
 
-VERCEL DEPLOYMENT  : https://inventory-mcp-server.vercel.app
+VERCEL DEPLOYMENT  : https://inventory-mcp-server-nine.vercel.app
 GITHUB             : https://github.com/idmpotent2025/inventory-mcp-server
-MCP ENDPOINT       : /api/mcp  (HTTP/SSE transport, OAuth 2.0 protected)
-TOOLS              : 11 registered tools
+MCP ENDPOINTS      : /api/mcp              (original, backward compat)
+                     /api/mcp/invoiceAdmin (TaskAgent — invoice tools)
+                     /api/mcp/delegatedAdmin (TeamAgent — member tools, org_admin only)
+TOOLS              : 11 registered tools (split across endpoints)
 BUILT WITH         : Next.js 14 · TypeScript · @modelcontextprotocol/sdk · Zod · Auth0
 
 
@@ -44,10 +46,23 @@ ROUTES
 ──────
 
   GET/POST  /api/mcp
-      Main MCP endpoint. Handles the MCP initialize handshake, tool discovery
-      (tools/list), and tool execution (tools/call) over HTTP/SSE transport.
-      All requests except the /help tool require a valid Bearer token issued
-      by the configured Auth0 tenant.
+      Original combined MCP endpoint. Kept for backward compatibility.
+      Exposes all 11 tools (both invoice and member domains) in one endpoint.
+      All requests except the /help tool require a valid Bearer token.
+
+  GET/POST  /api/mcp/invoiceAdmin
+      TaskAgent endpoint. Invoice domain only (7 tools: help, listInvoices,
+      addInvoice, notifyViaGmail, deleteInvoice, payInvoice,
+      rollbackDeleteInvoice). Used by the GlobalPartnerPortal TaskAgent page.
+      maxDuration = 55 (inline CIBA polling).
+
+  GET/POST  /api/mcp/delegatedAdmin
+      TeamAgent endpoint. Member management domain only (5 tools: help,
+      listMembers, inviteMember, resetPassword, deactivateMember). Every
+      tool except /help additionally enforces the org_admin role from the
+      https://globalpartnerportal.com/roles JWT claim (set via Auth0 Post
+      Login Action). Used by the GlobalPartnerPortal TeamAgent page.
+      maxDuration = 55 (inline CIBA polling).
 
   GET  /.well-known/oauth-authorization-server
       OAuth 2.0 Authorization Server metadata (RFC 8414). Advertises the
@@ -93,26 +108,35 @@ TOOL FILES
 Each tool file exports: a Zod schema (inputSchema), an execute function, and
 a TypeScript input type inferred from the schema.
 
-All tools are wired together in app/api/mcp/route.ts using
-server.registerTool(...) from @modelcontextprotocol/sdk/server.
+Tools are wired in three route files using server.registerTool(...):
+  app/api/mcp/route.ts               — all 11 tools (original combined endpoint)
+  app/api/mcp/invoiceAdmin/route.ts  — 7 invoice tools (TaskAgent)
+  app/api/mcp/delegatedAdmin/route.ts — 5 member tools (TeamAgent)
 
 
 TOOL REGISTRY (all 11 tools)
 ─────────────────────────────
 
-  #   Tool Name                Domain     Security Gate
-  ─── ───────────────────────  ─────────  ──────────────────────────────────────
-  1   help                     utility    None — open to unauthenticated callers
-  2   listInvoices             invoices   JWT bearer token
-  3   addInvoice               invoices   JWT + Auth0 FGA (writer on invoices:invoiceA)
-  4   deleteInvoice            invoices   JWT + CIBA push approval
-  5   payInvoice               invoices   JWT + RFC 8693 OBO → payments.widget.com
-  6   notifyViaGmail           invoices   JWT + Auth0 Token Vault → Google OAuth OBO
-  7   rollbackDeleteInvoice    invoices   JWT only (test reset — restores deleted invoices)
-  8   listMembers              members    JWT bearer token
-  9   inviteMember             members    JWT + Auth0 FGA (writer on members:default)
-  10  resetPassword            members    JWT + CIBA push approval
-  11  deactivateMember         members    JWT + RFC 8693 OBO → admin.widget.com
+  /api/mcp/invoiceAdmin — TaskAgent (7 tools)
+  ─── ───────────────────────  ──────────────────────────────────────
+  1   help                     None — open to unauthenticated callers
+  2   listInvoices             JWT bearer token
+  3   addInvoice               JWT + Auth0 FGA (writer on invoices:invoiceA)
+  4   deleteInvoice            JWT + CIBA push approval
+  5   payInvoice               JWT + RFC 8693 OBO → payments.widget.com
+  6   notifyViaGmail           JWT + Auth0 Token Vault → Google OAuth OBO
+  7   rollbackDeleteInvoice    JWT only (test reset — restores deleted invoices)
+
+  /api/mcp/delegatedAdmin — TeamAgent (5 tools, org_admin role required)
+  ─── ───────────────────────  ──────────────────────────────────────
+  1   help                     None — open to unauthenticated callers
+  2   listMembers              JWT + org_admin role claim
+  3   inviteMember             JWT + org_admin role + Auth0 FGA (writer on members:default)
+  4   resetPassword            JWT + org_admin role + CIBA push approval
+  5   deactivateMember         JWT + org_admin role + RFC 8693 OBO → admin.widget.com
+
+  /api/mcp — original combined endpoint (all 11 tools, backward compat)
+  See tool files in lib/tools/ for the full list.
 
 
 ────────────────────────────────────────────────────────────────────────────────
