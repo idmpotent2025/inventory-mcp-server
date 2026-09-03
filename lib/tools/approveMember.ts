@@ -1,13 +1,13 @@
 import { z } from 'zod'
 import { getApproval, updateApprovalStatus } from '@/lib/pendingApprovals'
-import { addMember } from '@/lib/members'
+import { addOrgMember } from '@/lib/auth0Management'
 import type { MCPToolContext } from './types'
 
-export const approveUserSchema = z.object({
+export const approveMemberSchema = z.object({
   requestId: z.string().describe('ID of the pending membership request to approve (e.g. apr-001)'),
 })
 
-export type ApproveUserInput = z.infer<typeof approveUserSchema>
+export type ApproveMemberInput = z.infer<typeof approveMemberSchema>
 
 // ── CIBA: initiate push notification ─────────────────────────────────────────
 
@@ -30,7 +30,7 @@ async function initiateCIBA(
     request_expiry: '120',
   })
 
-  console.log('[approveUser] initiating CIBA — sub:', ctx.sub, '| message:', bindingMessage)
+  console.log('[approveMember] initiating CIBA — sub:', ctx.sub, '| message:', bindingMessage)
 
   const res = await fetch(`https://${domain}/bc-authorize`, {
     method: 'POST',
@@ -40,12 +40,12 @@ async function initiateCIBA(
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('[approveUser] CIBA initiation failed — status:', res.status, '| body:', err)
+    console.error('[approveMember] CIBA initiation failed — status:', res.status, '| body:', err)
     throw new Error(`CIBA initiation failed: ${err}`)
   }
 
   const data = (await res.json()) as { auth_req_id: string; expires_in?: number; interval?: number }
-  console.log('[approveUser] CIBA initiated — auth_req_id:', data.auth_req_id, '| interval:', data.interval ?? 5)
+  console.log('[approveMember] CIBA initiated — auth_req_id:', data.auth_req_id, '| interval:', data.interval ?? 5)
   return { authReqId: data.auth_req_id, interval: data.interval ?? 5 }
 }
 
@@ -78,17 +78,17 @@ async function pollForApproval(authReqId: string, intervalSeconds: number): Prom
     const data = (await res.json()) as { error?: string; access_token?: string }
 
     if (res.ok) {
-      console.log('[approveUser] CIBA approved')
+      console.log('[approveMember] CIBA approved')
       return
     }
 
     const { error } = data
     if (error === 'authorization_pending') {
-      console.log('[approveUser] CIBA pending — next poll in', pollMs / 1000, 's')
+      console.log('[approveMember] CIBA pending — next poll in', pollMs / 1000, 's')
       continue
     } else if (error === 'slow_down') {
       pollMs += 5_000
-      console.log('[approveUser] CIBA slow_down — new interval:', pollMs / 1000, 's')
+      console.log('[approveMember] CIBA slow_down — new interval:', pollMs / 1000, 's')
       continue
     } else if (error === 'access_denied') {
       throw new Error('Authorization denied: the push notification was rejected.')
@@ -105,15 +105,15 @@ async function pollForApproval(authReqId: string, intervalSeconds: number): Prom
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Executes the approveUser MCP tool.
+ * Executes the approveMember MCP tool.
  *
  * Authorization:
  *   1. CIBA — sends push notification to the admin's device and polls
  *             Auth0 inline until approved or rejected.
  *   2. Core — marks the request approved and adds the user to the members store.
  */
-export async function executeApproveUser(params: ApproveUserInput, ctx: MCPToolContext) {
-  console.log('[approveUser] called with:', { requestId: params.requestId, sub: ctx.sub })
+export async function executeApproveMember(params: ApproveMemberInput, ctx: MCPToolContext) {
+  console.log('[approveMember] called with:', { requestId: params.requestId, sub: ctx.sub })
 
   const approval = getApproval(params.requestId)
   if (!approval) {
@@ -132,13 +132,22 @@ export async function executeApproveUser(params: ApproveUserInput, ctx: MCPToolC
   )
   await pollForApproval(authReqId, interval)
 
+  if (!approval.userId) {
+    throw new Error(`Request "${params.requestId}" is missing a userId — cannot add to organization.`)
+  }
+  const orgId = ctx.orgId ?? approval.orgId
+  if (!orgId) {
+    throw new Error('Forbidden: no organization context — cannot add member to org.')
+  }
+
+  await addOrgMember(orgId, approval.userId)
   updateApprovalStatus(params.requestId, 'approved')
-  const member = addMember(approval.userName, approval.userEmail, 'viewer')
 
   return {
     success: true,
-    message: `${approval.userName} has been approved and added to the organization as a viewer.`,
-    member,
+    message: `${approval.userName} has been approved and added to the organization.`,
+    userId: approval.userId,
+    orgId,
     approval: { ...approval, status: 'approved' },
   }
 }

@@ -18,14 +18,14 @@ TeamAgent — Delegated Admin tools (org_admin role required for all tools excep
                         Auth: JWT + org_admin role + CIBA push approval.
 
 • removeMember          Remove a member account. Uses RFC 8693 token exchange to obtain an
-                        admin.widget.com-scoped token before performing the action.
+                        https://api.salesforce.tamirsa.com token (removeMember scope) before performing the action.
                         Auth: JWT + org_admin role + RFC 8693 OBO token exchange.
 
 • listPendingApprovals  Show all pending membership requests for your organization. Users who
                         have requested access appear here until approved or rejected.
                         Auth: JWT + org_admin role.
 
-• approveUser           Approve a pending membership request (by request ID from listPendingApprovals).
+• approveMember         Approve a pending membership request (by request ID from listPendingApprovals).
                         Sends a push notification to your device for confirmation, then adds the
                         user to the organization as a viewer.
                         Auth: JWT + org_admin role + CIBA push approval.

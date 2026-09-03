@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { buildOpenFgaClient } from '@auth0/ai'
-import { addMember } from '@/lib/members'
+import { inviteOrgMember } from '@/lib/auth0Management'
 import type { MCPToolContext } from './types'
 
 export const inviteMemberSchema = z.object({
@@ -16,7 +16,7 @@ export type InviteMemberInput = z.infer<typeof inviteMemberSchema>
  *
  * Authorization:
  *   1. FGA — verifies `user:<sub> org_admin org:<orgId>`
- *   2. Core — creates the member invitation in the store
+ *   2. Core — sends Auth0 org invitation email via Management API
  */
 export async function executeInviteMember(params: InviteMemberInput, ctx: MCPToolContext) {
   if (!ctx.orgId) {
@@ -33,6 +33,11 @@ export async function executeInviteMember(params: InviteMemberInput, ctx: MCPToo
     throw new Error('Forbidden: you do not have permission to invite members.')
   }
 
-  const member = addMember(params.name, params.email, params.role)
-  return { success: true, member }
+  console.log('[inviteMember] sending org invitation — orgId:', ctx.orgId, '| email:', params.email)
+  const invitation = await inviteOrgMember(ctx.orgId, params.email, params.name)
+  return {
+    success: true,
+    message: `Invitation sent to ${params.email}. They will receive an email to join the organization.`,
+    invitation,
+  }
 }

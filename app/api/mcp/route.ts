@@ -26,7 +26,7 @@ import { rollbackDeleteInvoiceSchema, executeRollbackDeleteInvoice } from '@/lib
 import { listMembersSchema, executeListMembers } from '@/lib/tools/listMembers'
 import { inviteMemberSchema, executeInviteMember } from '@/lib/tools/inviteMember'
 import { resetPasswordSchema, executeResetPassword } from '@/lib/tools/resetPassword'
-import { deactivateMemberSchema, executeDeactivateMember } from '@/lib/tools/deactivateMember'
+import { removeMemberSchema, executeRemoveMember } from '@/lib/tools/removeMember'
 import type { MCPToolContext } from '@/lib/tools/types'
 
 // ── Auth0 JWT verification ────────────────────────────────────────────────────
@@ -378,33 +378,33 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 11: deactivateMember ─────────────────────────────────────────────
+    // ── Tool 11: removeMember ─────────────────────────────────────────────────
     // Authorization: bearer token + RFC 8693 OBO token exchange.
-    // The user's portal token is exchanged for an admin.widget.com token
-    // (deactivateMembers scope) before marking the member inactive.
+    // The user's portal token is exchanged for a https://api.salesforce.tamirsa.com token
+    // (removeMember scope) before marking the member inactive.
     server.registerTool(
-      'deactivateMember',
+      'removeMember',
       {
-        title: 'Deactivate Member',
+        title: 'Remove Member',
         description:
-          'Deactivate a portal member. Uses RFC 8693 On-Behalf-Of token exchange to obtain an ' +
-          'admin.widget.com token (deactivateMembers scope) before deactivating.',
-        inputSchema: deactivateMemberSchema,
+          'Remove a portal member. Uses RFC 8693 On-Behalf-Of token exchange to obtain a ' +
+          'https://api.salesforce.tamirsa.com token (removeMember scope) before removing.',
+        inputSchema: removeMemberSchema,
       },
       async (params, ctx) => {
-        console.log('[mcp/deactivateMember] called — params:', JSON.stringify(params))
-        const mcpCtx = extractCtx(ctx, 'deactivateMember')
+        console.log('[mcp/removeMember] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'removeMember')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
-          const result = await executeDeactivateMember(params, mcpCtx)
-          console.log('[mcp/deactivateMember] success — result:', JSON.stringify(result))
+          const result = await executeRemoveMember(params, mcpCtx)
+          console.log('[mcp/removeMember] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Failed to deactivate member.'
-          console.error('[mcp/deactivateMember] error:', msg)
+          const msg = err instanceof Error ? err.message : 'Failed to remove member.'
+          console.error('[mcp/removeMember] error:', msg)
           return errorResponse(msg)
         }
       },

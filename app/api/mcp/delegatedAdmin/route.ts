@@ -8,9 +8,9 @@
  *   listMembers           — JWT + org_admin role check
  *   inviteMember          — JWT + org_admin + FGA org_admin on org:<orgId>
  *   resetPassword         — JWT + org_admin + CIBA push approval
- *   removeMember          — JWT + org_admin + RFC 8693 OBO → admin.widget.com
+ *   removeMember          — JWT + org_admin + RFC 8693 OBO → https://api.salesforce.tamirsa.com
  *   listPendingApprovals  — JWT + org_admin role check
- *   approveUser           — JWT + org_admin + CIBA push approval
+ *   approveMember         — JWT + org_admin + CIBA push approval
  *
  * Role claim setup: add a Post Login Action in Auth0 that sets:
  *   api.accessToken.setCustomClaim(
@@ -31,7 +31,7 @@ import { inviteMemberSchema, executeInviteMember } from '@/lib/tools/inviteMembe
 import { resetPasswordSchema, executeResetPassword } from '@/lib/tools/resetPassword'
 import { removeMemberSchema, executeRemoveMember } from '@/lib/tools/removeMember'
 import { listPendingApprovalsSchema, executeListPendingApprovals } from '@/lib/tools/listPendingApprovals'
-import { approveUserSchema, executeApproveUser } from '@/lib/tools/approveUser'
+import { approveMemberSchema, executeApproveMember } from '@/lib/tools/approveMember'
 import { delegatedAdminHelpSchema, executeDelegatedAdminHelp } from '@/lib/tools/delegatedAdminHelp'
 
 const domain = process.env.AUTH0_DOMAIN!
@@ -203,7 +203,7 @@ const mcpHandler = createMcpHandler(
         title: 'Remove Member',
         description:
           'Remove a portal member. Requires org_admin role and RFC 8693 OBO token exchange ' +
-          'to obtain an admin.widget.com token (deactivateMembers scope).',
+          'to obtain a https://api.salesforce.tamirsa.com token (removeMember scope).',
         inputSchema: removeMemberSchema,
       },
       async (params, ctx) => {
@@ -248,28 +248,28 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 6: approveUser — JWT + org_admin + CIBA push ────────────────────
+    // ── Tool 6: approveMember — JWT + org_admin + CIBA push ──────────────────
     server.registerTool(
-      'approveUser',
+      'approveMember',
       {
-        title: 'Approve User',
+        title: 'Approve Member',
         description:
           'Approve a pending membership request, adding the user to the organization. ' +
           'Sends a push notification to your enrolled device for confirmation before the ' +
           'user is granted access. Requires org_admin role.',
-        inputSchema: approveUserSchema,
+        inputSchema: approveMemberSchema,
       },
       async (params, ctx) => {
-        console.log('[mcp/delegatedAdmin/approveUser] params:', JSON.stringify(params))
-        const mcpCtx = extractCtx(ctx, 'approveUser')
+        console.log('[mcp/delegatedAdmin/approveMember] params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'approveMember')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
-        if (!requireOrgAdmin(ctx, 'approveUser')) return errorResponse('Forbidden: org_admin role required to approve membership requests.')
+        if (!requireOrgAdmin(ctx, 'approveMember')) return errorResponse('Forbidden: org_admin role required to approve membership requests.')
         try {
-          const result = await executeApproveUser(params, mcpCtx)
+          const result = await executeApproveMember(params, mcpCtx)
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Failed to approve user.'
-          console.error('[mcp/delegatedAdmin/approveUser] error:', msg)
+          const msg = err instanceof Error ? err.message : 'Failed to approve member.'
+          console.error('[mcp/delegatedAdmin/approveMember] error:', msg)
           return errorResponse(msg)
         }
       },

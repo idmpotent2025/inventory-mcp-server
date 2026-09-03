@@ -59,7 +59,7 @@ ROUTES
   GET/POST  /api/mcp/delegatedAdmin
       TeamAgent endpoint. Member management domain only (7 tools: help,
       listMembers, inviteMember, resetPassword, removeMember,
-      listPendingApprovals, approveUser). Every tool except /help additionally
+      listPendingApprovals, approveMember). Every tool except /help additionally
       enforces the org_admin role from the
       https://portal.auth.tamirsa.com/org_role JWT claim (set via Auth0
       Post Login Action). Used by the GlobalPartnerPortal TeamAgent page.
@@ -106,9 +106,9 @@ TOOL FILES
   lib/tools/listMembers.ts              — JWT only
   lib/tools/inviteMember.ts             — FGA check (org_admin on org:<orgId>)
   lib/tools/resetPassword.ts            — CIBA push
-  lib/tools/removeMember.ts         — RFC 8693 token exchange (admin.widget.com)
+  lib/tools/removeMember.ts         — RFC 8693 token exchange (https://api.salesforce.tamirsa.com)
   lib/tools/listPendingApprovals.ts     — JWT only
-  lib/tools/approveUser.ts              — CIBA push
+  lib/tools/approveMember.ts            — CIBA push
   lib/tools/delegatedAdminHelp.ts       — member-domain help text
 
 Each tool file exports: a Zod schema (inputSchema), an execute function, and
@@ -139,9 +139,9 @@ TOOL REGISTRY (all 11 tools)
   2   listMembers                  JWT + org_admin role claim
   3   inviteMember                 JWT + org_admin role + Auth0 FGA (org_admin on org:<orgId>)
   4   resetPassword                JWT + org_admin role + CIBA push approval
-  5   removeMember             JWT + org_admin role + RFC 8693 OBO → admin.widget.com
+  5   removeMember             JWT + org_admin role + RFC 8693 OBO → https://api.salesforce.tamirsa.com
   6   listPendingApprovals         JWT + org_admin role claim
-  7   approveUser                  JWT + org_admin role + CIBA push approval
+  7   approveMember                JWT + org_admin role + CIBA push approval
 
   /api/mcp — original combined endpoint (all 11 tools, backward compat)
   See tool files in lib/tools/ for the full list.
@@ -216,9 +216,9 @@ Env vars required: FGA_STORE_ID, FGA_CLIENT_ID, FGA_CLIENT_SECRET
 Optional overrides: FGA_API_URL, FGA_API_TOKEN_ISSUER, FGA_API_AUDIENCE
 
 
-PATTERN 3 — CIBA PUSH APPROVAL (deleteInvoice, resetPassword, approveUser)
+PATTERN 3 — CIBA PUSH APPROVAL (deleteInvoice, resetPassword, approveMember)
 ───────────────────────────────────────────────────────────────────────────
-Tools: deleteInvoice · resetPassword · approveUser
+Tools: deleteInvoice · resetPassword · approveMember
 
 CIBA (Client-Initiated Backchannel Authentication, RFC 9126) lets the server
 push an approval request to the user's enrolled device (Auth0 Guardian) before
@@ -266,7 +266,7 @@ for a narrower, downstream-scoped token before calling an external service.
 The downstream service never sees the caller's original token.
 
   payInvoice:       exchanges for audience=payments.widget.com, scope=makePayments
-  removeMember:     exchanges for audience=admin.widget.com,    scope=deactivateMembers
+  removeMember:     exchanges for audience=https://api.salesforce.tamirsa.com,    scope=removeMember
 
 Implementation:
 
@@ -276,8 +276,8 @@ Implementation:
     client_secret     = AUTH0_TOKEN_EXCHANGE_CLIENT_SECRET
     subject_token     = ctx.token  (the caller's incoming JWT)
     subject_token_type = <custom type registered in Auth0>
-    audience          = payments.widget.com  |  admin.widget.com
-    scope             = makePayments          |  deactivateMembers
+    audience          = payments.widget.com  |  https://api.salesforce.tamirsa.com
+    scope             = makePayments          |  removeMember
 
   → returns { access_token } scoped to the downstream audience
 
@@ -326,10 +326,18 @@ Env vars required: AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_AUD
     AUTH0_TOKEN_EXCHANGE_CLIENT_SECRET
     AUTH0_ADMIN_TOKEN_EXCHANGE_CLIENT_ID
     AUTH0_ADMIN_TOKEN_EXCHANGE_CLIENT_SECRET
+    DELADMIN_A0_MGMT_CLIENT_ID        (M2M client for Management API — org invitations, password tickets, member add/remove)
+    DELADMIN_A0_MGMT_CLIENT_SECRET    (M2M client secret — authorize on https://{domain}/api/v2/)
     FGA_STORE_ID
     FGA_CLIENT_ID
     FGA_CLIENT_SECRET
     NOTIFICATION_EMAIL_TO
     NEXT_PUBLIC_APP_URL
+
+  Management API scopes required for DELADMIN_A0_MGMT_CLIENT_ID:
+    create:organization_invitations   (inviteMember)
+    create:user_tickets               (resetPassword)
+    delete:organization_members       (removeMember)
+    create:organization_members       (approveMember)
 
 ================================================================================

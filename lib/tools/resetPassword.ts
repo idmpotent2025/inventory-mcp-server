@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { getMember } from '@/lib/members'
+import { resetUserPassword } from '@/lib/auth0Management'
 import type { MCPToolContext } from './types'
 
 export const resetPasswordSchema = z.object({
-  memberId: z.string().describe('ID of the member whose password to reset (e.g. mbr-001)'),
+  userId: z.string().describe('Auth0 user ID of the member whose password to reset (e.g. auth0|abc123)'),
 })
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
@@ -107,31 +107,24 @@ async function pollForApproval(authReqId: string, intervalSeconds: number): Prom
  * Executes the resetPassword MCP tool.
  *
  * Authorization:
- *   1. CIBA — sends push notification to the user's device and polls
+ *   1. CIBA — sends push notification to the admin's device and polls
  *             Auth0 inline until approved or rejected.
- *   2. Core — triggers password reset for the member.
+ *   2. Core — generates a password change ticket via Management API.
  */
 export async function executeResetPassword(params: ResetPasswordInput, ctx: MCPToolContext) {
-  console.log('[resetPassword] called with:', {
-    memberId: params.memberId,
-    sub: ctx.sub,
-    tokenPresent: !!ctx.token,
-  })
-
-  const member = getMember(params.memberId)
-  if (!member) {
-    throw new Error(`Member "${params.memberId}" not found.`)
-  }
+  console.log('[resetPassword] called with:', { userId: params.userId, sub: ctx.sub })
 
   const { authReqId, interval } = await initiateCIBA(
     ctx,
-    `Approve password reset for ${member.name} (${params.memberId})`,
+    `Approve password reset for ${params.userId}`,
   )
   await pollForApproval(authReqId, interval)
 
+  const { ticket } = await resetUserPassword(params.userId)
   return {
     success: true,
-    message: `Password reset link sent to ${member.email}.`,
-    member,
+    message: `Password reset ticket generated for ${params.userId}. Send the link below to the user.`,
+    ticketUrl: ticket,
+    userId: params.userId,
   }
 }

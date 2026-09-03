@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getMember, updateMemberStatus } from '@/lib/members'
+import { removeOrgMember } from '@/lib/auth0Management'
 import type { MCPToolContext } from './types'
 
 function decodeJwtClaims(jwt: string): Record<string, unknown> {
@@ -23,17 +23,17 @@ function logTokenClaims(label: string, jwt: string) {
 }
 
 export const removeMemberSchema = z.object({
-  memberId: z.string().describe('ID of the member to remove (e.g. mbr-002)'),
+  userId: z.string().describe('Auth0 user ID of the member to remove from the organization (e.g. auth0|abc123)'),
 })
 
 export type RemoveMemberInput = z.infer<typeof removeMemberSchema>
 
 /**
- * Exchanges the user's portal access token for an admin.widget.com token
+ * Exchanges the user's portal access token for an https://api.salesforce.tamirsa.com token
  * using RFC 8693 On-Behalf-Of token exchange.
  *
  * The exchanged token has:
- *   audience: admin.widget.com  permissions: deactivateMembers
+ *   audience: https://api.salesforce.tamirsa.com  permissions: removeMember
  */
 async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
   const domain = process.env.AUTH0_DOMAIN!
@@ -46,11 +46,11 @@ async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
     client_secret: clientSecret,
     subject_token: subjectToken,
     subject_token_type: 'cloud.oktademo.redsalsa.mcpserverclient:access_token',
-    audience: 'admin.widget.com',
-    scope: 'deactivateMembers',
+    audience: 'https://api.salesforce.tamirsa.com',
+    scope: 'removeMember',
   })
 
-  console.log('[removeMember] token exchange request — audience: admin.widget.com | scope: deactivateMembers | domain:', domain)
+  console.log('[removeMember] token exchange request — audience: https://api.salesforce.tamirsa.com | scope: removeMember | domain:', domain)
 
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
@@ -61,7 +61,7 @@ async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
   if (!res.ok) {
     const err = await res.text()
     console.error('[removeMember] token exchange failed — status:', res.status, '| body:', err)
-    throw new Error(`Token exchange failed (admin.widget.com): ${err}`)
+    throw new Error(`Token exchange failed (https://api.salesforce.tamirsa.com): ${err}`)
   }
 
   const data = (await res.json()) as { access_token: string }
@@ -74,20 +74,12 @@ async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
  *
  * Authorization:
  *   1. RFC 8693 OBO token exchange — user's portal token →
- *      admin.widget.com token with deactivateMembers scope
- *   2. Core — marks the member as inactive
+ *      https://api.salesforce.tamirsa.com token with removeMember scope
+ *   2. Core — removes the user from the Auth0 organization via Management API
  */
 export async function executeRemoveMember(params: RemoveMemberInput, ctx: MCPToolContext) {
-  const member = getMember(params.memberId)
-  if (!member) {
-    throw new Error(`Member "${params.memberId}" not found.`)
-  }
-  if (member.status === 'inactive') {
-    return {
-      success: true,
-      message: `Member ${member.name} (${member.id}) is already inactive.`,
-      member,
-    }
+  if (!ctx.orgId) {
+    throw new Error('Forbidden: no organization context in token. Sign in via an Auth0 organization.')
   }
 
   logTokenClaims('incoming', ctx.token)
@@ -96,10 +88,11 @@ export async function executeRemoveMember(params: RemoveMemberInput, ctx: MCPToo
 
   logTokenClaims('exchanged (admin)', adminToken)
 
-  const updated = updateMemberStatus(params.memberId, 'inactive')
+  await removeOrgMember(ctx.orgId, params.userId)
   return {
     success: true,
-    message: `Member ${member.name} (${member.id}) has been removed.`,
-    member: updated,
+    message: `User ${params.userId} has been removed from the organization.`,
+    userId: params.userId,
+    orgId: ctx.orgId,
   }
 }
