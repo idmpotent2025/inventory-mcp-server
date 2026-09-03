@@ -58,7 +58,7 @@ ROUTES
 
   GET/POST  /api/mcp/delegatedAdmin
       TeamAgent endpoint. Member management domain only (7 tools: help,
-      listMembers, inviteMember, resetPassword, deactivateMember,
+      listMembers, inviteMember, resetPassword, removeMember,
       listPendingApprovals, approveUser). Every tool except /help additionally
       enforces the org_admin role from the
       https://portal.auth.tamirsa.com/org_role JWT claim (set via Auth0
@@ -106,7 +106,7 @@ TOOL FILES
   lib/tools/listMembers.ts              — JWT only
   lib/tools/inviteMember.ts             — FGA check (org_admin on org:<orgId>)
   lib/tools/resetPassword.ts            — CIBA push
-  lib/tools/deactivateMember.ts         — RFC 8693 token exchange (admin.widget.com)
+  lib/tools/removeMember.ts         — RFC 8693 token exchange (admin.widget.com)
   lib/tools/listPendingApprovals.ts     — JWT only
   lib/tools/approveUser.ts              — CIBA push
   lib/tools/delegatedAdminHelp.ts       — member-domain help text
@@ -139,7 +139,7 @@ TOOL REGISTRY (all 11 tools)
   2   listMembers                  JWT + org_admin role claim
   3   inviteMember                 JWT + org_admin role + Auth0 FGA (org_admin on org:<orgId>)
   4   resetPassword                JWT + org_admin role + CIBA push approval
-  5   deactivateMember             JWT + org_admin role + RFC 8693 OBO → admin.widget.com
+  5   removeMember             JWT + org_admin role + RFC 8693 OBO → admin.widget.com
   6   listPendingApprovals         JWT + org_admin role claim
   7   approveUser                  JWT + org_admin role + CIBA push approval
 
@@ -257,16 +257,16 @@ Env vars required: AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_AUD
 Device requirement: User must be enrolled in Auth0 Guardian push notifications
 
 
-PATTERN 4 — RFC 8693 ON-BEHALF-OF TOKEN EXCHANGE (payInvoice, deactivateMember)
+PATTERN 4 — RFC 8693 ON-BEHALF-OF TOKEN EXCHANGE (payInvoice, removeMember)
 ──────────────────────────────────────────────────────────────────────────────────
-Tools: payInvoice · deactivateMember
+Tools: payInvoice · removeMember
 
 RFC 8693 Token Exchange lets this server swap the caller's portal-scoped token
 for a narrower, downstream-scoped token before calling an external service.
 The downstream service never sees the caller's original token.
 
   payInvoice:       exchanges for audience=payments.widget.com, scope=makePayments
-  deactivateMember: exchanges for audience=admin.widget.com,    scope=deactivateMembers
+  removeMember:     exchanges for audience=admin.widget.com,    scope=deactivateMembers
 
 Implementation:
 

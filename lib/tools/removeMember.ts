@@ -12,7 +12,7 @@ function decodeJwtClaims(jwt: string): Record<string, unknown> {
 
 function logTokenClaims(label: string, jwt: string) {
   const c = decodeJwtClaims(jwt)
-  console.log(`[deactivateMember] ${label} claims:`, JSON.stringify({
+  console.log(`[removeMember] ${label} claims:`, JSON.stringify({
     iss: c.iss,
     aud: c.aud,
     sub: c.sub,
@@ -22,11 +22,11 @@ function logTokenClaims(label: string, jwt: string) {
   }))
 }
 
-export const deactivateMemberSchema = z.object({
-  memberId: z.string().describe('ID of the member to deactivate (e.g. mbr-002)'),
+export const removeMemberSchema = z.object({
+  memberId: z.string().describe('ID of the member to remove (e.g. mbr-002)'),
 })
 
-export type DeactivateMemberInput = z.infer<typeof deactivateMemberSchema>
+export type RemoveMemberInput = z.infer<typeof removeMemberSchema>
 
 /**
  * Exchanges the user's portal access token for an admin.widget.com token
@@ -50,7 +50,7 @@ async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
     scope: 'deactivateMembers',
   })
 
-  console.log('[deactivateMember] token exchange request — audience: admin.widget.com | scope: deactivateMembers | domain:', domain)
+  console.log('[removeMember] token exchange request — audience: admin.widget.com | scope: deactivateMembers | domain:', domain)
 
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
@@ -60,24 +60,24 @@ async function exchangeTokenForAdmin(subjectToken: string): Promise<string> {
 
   if (!res.ok) {
     const err = await res.text()
-    console.error('[deactivateMember] token exchange failed — status:', res.status, '| body:', err)
+    console.error('[removeMember] token exchange failed — status:', res.status, '| body:', err)
     throw new Error(`Token exchange failed (admin.widget.com): ${err}`)
   }
 
   const data = (await res.json()) as { access_token: string }
-  console.log('[deactivateMember] token exchange succeeded — status:', res.status)
+  console.log('[removeMember] token exchange succeeded — status:', res.status)
   return data.access_token
 }
 
 /**
- * Executes the deactivateMember MCP tool.
+ * Executes the removeMember MCP tool.
  *
  * Authorization:
  *   1. RFC 8693 OBO token exchange — user's portal token →
  *      admin.widget.com token with deactivateMembers scope
  *   2. Core — marks the member as inactive
  */
-export async function executeDeactivateMember(params: DeactivateMemberInput, ctx: MCPToolContext) {
+export async function executeRemoveMember(params: RemoveMemberInput, ctx: MCPToolContext) {
   const member = getMember(params.memberId)
   if (!member) {
     throw new Error(`Member "${params.memberId}" not found.`)
@@ -99,7 +99,7 @@ export async function executeDeactivateMember(params: DeactivateMemberInput, ctx
   const updated = updateMemberStatus(params.memberId, 'inactive')
   return {
     success: true,
-    message: `Member ${member.name} (${member.id}) has been deactivated.`,
+    message: `Member ${member.name} (${member.id}) has been removed.`,
     member: updated,
   }
 }

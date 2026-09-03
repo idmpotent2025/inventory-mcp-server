@@ -17,7 +17,7 @@ TeamAgent — Delegated Admin tools (org_admin role required for all tools excep
                         approval before the reset link is issued.
                         Auth: JWT + org_admin role + CIBA push approval.
 
-• deactivateMember      Deactivate a member account. Uses RFC 8693 token exchange to obtain an
+• removeMember          Remove a member account. Uses RFC 8693 token exchange to obtain an
                         admin.widget.com-scoped token before performing the action.
                         Auth: JWT + org_admin role + RFC 8693 OBO token exchange.
 

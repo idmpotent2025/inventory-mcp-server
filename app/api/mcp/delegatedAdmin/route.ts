@@ -8,7 +8,7 @@
  *   listMembers           — JWT + org_admin role check
  *   inviteMember          — JWT + org_admin + FGA org_admin on org:<orgId>
  *   resetPassword         — JWT + org_admin + CIBA push approval
- *   deactivateMember      — JWT + org_admin + RFC 8693 OBO → admin.widget.com
+ *   removeMember          — JWT + org_admin + RFC 8693 OBO → admin.widget.com
  *   listPendingApprovals  — JWT + org_admin role check
  *   approveUser           — JWT + org_admin + CIBA push approval
  *
@@ -29,7 +29,7 @@ import { jwtVerify, createRemoteJWKSet } from 'jose'
 import { listMembersSchema, executeListMembers } from '@/lib/tools/listMembers'
 import { inviteMemberSchema, executeInviteMember } from '@/lib/tools/inviteMember'
 import { resetPasswordSchema, executeResetPassword } from '@/lib/tools/resetPassword'
-import { deactivateMemberSchema, executeDeactivateMember } from '@/lib/tools/deactivateMember'
+import { removeMemberSchema, executeRemoveMember } from '@/lib/tools/removeMember'
 import { listPendingApprovalsSchema, executeListPendingApprovals } from '@/lib/tools/listPendingApprovals'
 import { approveUserSchema, executeApproveUser } from '@/lib/tools/approveUser'
 import { delegatedAdminHelpSchema, executeDelegatedAdminHelp } from '@/lib/tools/delegatedAdminHelp'
@@ -196,27 +196,27 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 4: deactivateMember — JWT + org_admin + RFC 8693 OBO ────────────
+    // ── Tool 4: removeMember — JWT + org_admin + RFC 8693 OBO ────────────────
     server.registerTool(
-      'deactivateMember',
+      'removeMember',
       {
-        title: 'Deactivate Member',
+        title: 'Remove Member',
         description:
-          'Deactivate a portal member. Requires org_admin role and RFC 8693 OBO token exchange ' +
+          'Remove a portal member. Requires org_admin role and RFC 8693 OBO token exchange ' +
           'to obtain an admin.widget.com token (deactivateMembers scope).',
-        inputSchema: deactivateMemberSchema,
+        inputSchema: removeMemberSchema,
       },
       async (params, ctx) => {
-        console.log('[mcp/delegatedAdmin/deactivateMember] params:', JSON.stringify(params))
-        const mcpCtx = extractCtx(ctx, 'deactivateMember')
+        console.log('[mcp/delegatedAdmin/removeMember] params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'removeMember')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
-        if (!requireOrgAdmin(ctx, 'deactivateMember')) return errorResponse('Forbidden: org_admin role required to deactivate members.')
+        if (!requireOrgAdmin(ctx, 'removeMember')) return errorResponse('Forbidden: org_admin role required to remove members.')
         try {
-          const result = await executeDeactivateMember(params, mcpCtx)
+          const result = await executeRemoveMember(params, mcpCtx)
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Failed to deactivate member.'
-          console.error('[mcp/delegatedAdmin/deactivateMember] error:', msg)
+          const msg = err instanceof Error ? err.message : 'Failed to remove member.'
+          console.error('[mcp/delegatedAdmin/removeMember] error:', msg)
           return errorResponse(msg)
         }
       },
