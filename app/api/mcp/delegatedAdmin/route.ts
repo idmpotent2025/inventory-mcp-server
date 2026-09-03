@@ -5,10 +5,12 @@
  * All tools require a valid JWT AND the org_admin role in the caller's claims.
  *
  * Auth0 patterns per tool:
- *   listMembers      — JWT + org_admin role check
- *   inviteMember     — JWT + org_admin + FGA org_admin on org:<orgId>
- *   resetPassword    — JWT + org_admin + CIBA push approval
- *   deactivateMember — JWT + org_admin + RFC 8693 OBO → admin.widget.com
+ *   listMembers           — JWT + org_admin role check
+ *   inviteMember          — JWT + org_admin + FGA org_admin on org:<orgId>
+ *   resetPassword         — JWT + org_admin + CIBA push approval
+ *   deactivateMember      — JWT + org_admin + RFC 8693 OBO → admin.widget.com
+ *   listPendingApprovals  — JWT + org_admin role check
+ *   approveUser           — JWT + org_admin + CIBA push approval
  *
  * Role claim setup: add a Post Login Action in Auth0 that sets:
  *   api.accessToken.setCustomClaim(
@@ -28,7 +30,9 @@ import { listMembersSchema, executeListMembers } from '@/lib/tools/listMembers'
 import { inviteMemberSchema, executeInviteMember } from '@/lib/tools/inviteMember'
 import { resetPasswordSchema, executeResetPassword } from '@/lib/tools/resetPassword'
 import { deactivateMemberSchema, executeDeactivateMember } from '@/lib/tools/deactivateMember'
-import { helpSchema, executeHelp } from '@/lib/tools/help'
+import { listPendingApprovalsSchema, executeListPendingApprovals } from '@/lib/tools/listPendingApprovals'
+import { approveUserSchema, executeApproveUser } from '@/lib/tools/approveUser'
+import { delegatedAdminHelpSchema, executeDelegatedAdminHelp } from '@/lib/tools/delegatedAdminHelp'
 
 const domain = process.env.AUTH0_DOMAIN!
 const audience = process.env.AUTH0_AUDIENCE!
@@ -113,10 +117,10 @@ const mcpHandler = createMcpHandler(
         description:
           'Show all available delegated admin tools and how to use this agent. ' +
           'Call this when the user types /help or asks what this agent can do.',
-        inputSchema: helpSchema,
+        inputSchema: delegatedAdminHelpSchema,
       },
       async (params) => {
-        const result = executeHelp(params)
+        const result = executeDelegatedAdminHelp(params)
         return { content: [{ type: 'text' as const, text: result.text }] }
       },
     )
@@ -213,6 +217,59 @@ const mcpHandler = createMcpHandler(
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Failed to deactivate member.'
           console.error('[mcp/delegatedAdmin/deactivateMember] error:', msg)
+          return errorResponse(msg)
+        }
+      },
+    )
+
+    // ── Tool 5: listPendingApprovals — JWT + org_admin ────────────────────────
+    server.registerTool(
+      'listPendingApprovals',
+      {
+        title: 'List Pending Approvals',
+        description:
+          'List pending membership requests for your organization. Returns users who have ' +
+          'requested to join and are waiting for admin approval. Requires org_admin role.',
+        inputSchema: listPendingApprovalsSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/delegatedAdmin/listPendingApprovals] called')
+        const mcpCtx = extractCtx(ctx, 'listPendingApprovals')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity. Please log in to the portal.')
+        if (!requireOrgAdmin(ctx, 'listPendingApprovals')) return errorResponse('Forbidden: org_admin role required to view pending approvals.')
+        try {
+          const result = await executeListPendingApprovals(params, mcpCtx)
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to list pending approvals.'
+          console.error('[mcp/delegatedAdmin/listPendingApprovals] error:', msg)
+          return errorResponse(msg)
+        }
+      },
+    )
+
+    // ── Tool 6: approveUser — JWT + org_admin + CIBA push ────────────────────
+    server.registerTool(
+      'approveUser',
+      {
+        title: 'Approve User',
+        description:
+          'Approve a pending membership request, adding the user to the organization. ' +
+          'Sends a push notification to your enrolled device for confirmation before the ' +
+          'user is granted access. Requires org_admin role.',
+        inputSchema: approveUserSchema,
+      },
+      async (params, ctx) => {
+        console.log('[mcp/delegatedAdmin/approveUser] params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'approveUser')
+        if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
+        if (!requireOrgAdmin(ctx, 'approveUser')) return errorResponse('Forbidden: org_admin role required to approve membership requests.')
+        try {
+          const result = await executeApproveUser(params, mcpCtx)
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to approve user.'
+          console.error('[mcp/delegatedAdmin/approveUser] error:', msg)
           return errorResponse(msg)
         }
       },

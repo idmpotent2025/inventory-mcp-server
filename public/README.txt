@@ -7,7 +7,7 @@ GITHUB             : https://github.com/idmpotent2025/inventory-mcp-server
 MCP ENDPOINTS      : /api/mcp              (original, backward compat)
                      /api/mcp/invoiceAdmin (TaskAgent — invoice tools)
                      /api/mcp/delegatedAdmin (TeamAgent — member tools, org_admin only)
-TOOLS              : 11 registered tools (split across endpoints)
+TOOLS              : 13 registered tools (split across endpoints)
 BUILT WITH         : Next.js 14 · TypeScript · @modelcontextprotocol/sdk · Zod · Auth0
 
 
@@ -57,9 +57,10 @@ ROUTES
       maxDuration = 55 (inline CIBA polling).
 
   GET/POST  /api/mcp/delegatedAdmin
-      TeamAgent endpoint. Member management domain only (5 tools: help,
-      listMembers, inviteMember, resetPassword, deactivateMember). Every
-      tool except /help additionally enforces the org_admin role from the
+      TeamAgent endpoint. Member management domain only (7 tools: help,
+      listMembers, inviteMember, resetPassword, deactivateMember,
+      listPendingApprovals, approveUser). Every tool except /help additionally
+      enforces the org_admin role from the
       https://portal.auth.tamirsa.com/org_role JWT claim (set via Auth0
       Post Login Action). Used by the GlobalPartnerPortal TeamAgent page.
       maxDuration = 55 (inline CIBA polling).
@@ -83,8 +84,10 @@ DATA STORES (in-memory, seeded on cold start)
 
   lib/invoices.ts   — 5 invoices (INV-001 … INV-005), statuses: draft/pending/paid/overdue
   lib/inventory.ts  — inventory items with quantity and price
-  lib/members.ts    — 5 portal members (mbr-001 … mbr-005), roles: admin/editor/viewer,
-                      statuses: active/inactive/invited
+  lib/members.ts         — 5 portal members (mbr-001 … mbr-005), roles: admin/editor/viewer,
+                           statuses: active/inactive/invited
+  lib/pendingApprovals.ts — 3 pending membership requests (apr-001 … apr-003),
+                           seeded with org_YOdWQXlK7kxkWFLo, resets on cold start
 
   All stores are Maps held in module scope. They reset on Vercel cold start.
   rollbackDeleteInvoice restores invoice state without a cold start.
@@ -100,18 +103,21 @@ TOOL FILES
   lib/tools/payInvoice.ts         — RFC 8693 token exchange (payments.widget.com)
   lib/tools/notifyInvoice.ts      — Auth0 Token Vault (Google OAuth OBO)
   lib/tools/rollbackDelete.ts     — JWT only, test-reset utility
-  lib/tools/listMembers.ts        — JWT only
-  lib/tools/inviteMember.ts       — FGA check
-  lib/tools/resetPassword.ts      — CIBA push
-  lib/tools/deactivateMember.ts   — RFC 8693 token exchange (admin.widget.com)
+  lib/tools/listMembers.ts              — JWT only
+  lib/tools/inviteMember.ts             — FGA check (org_admin on org:<orgId>)
+  lib/tools/resetPassword.ts            — CIBA push
+  lib/tools/deactivateMember.ts         — RFC 8693 token exchange (admin.widget.com)
+  lib/tools/listPendingApprovals.ts     — JWT only
+  lib/tools/approveUser.ts              — CIBA push
+  lib/tools/delegatedAdminHelp.ts       — member-domain help text
 
 Each tool file exports: a Zod schema (inputSchema), an execute function, and
 a TypeScript input type inferred from the schema.
 
 Tools are wired in three route files using server.registerTool(...):
-  app/api/mcp/route.ts               — all 11 tools (original combined endpoint)
+  app/api/mcp/route.ts               — all 11 tools (original combined endpoint, backward compat)
   app/api/mcp/invoiceAdmin/route.ts  — 7 invoice tools (TaskAgent)
-  app/api/mcp/delegatedAdmin/route.ts — 5 member tools (TeamAgent)
+  app/api/mcp/delegatedAdmin/route.ts — 7 member tools (TeamAgent)
 
 
 TOOL REGISTRY (all 11 tools)
@@ -127,13 +133,15 @@ TOOL REGISTRY (all 11 tools)
   6   notifyViaGmail           JWT + Auth0 Token Vault → Google OAuth OBO
   7   rollbackDeleteInvoice    JWT only (test reset — restores deleted invoices)
 
-  /api/mcp/delegatedAdmin — TeamAgent (5 tools, org_admin role required)
-  ─── ───────────────────────  ──────────────────────────────────────
-  1   help                     None — open to unauthenticated callers
-  2   listMembers              JWT + org_admin role claim
-  3   inviteMember             JWT + org_admin role + Auth0 FGA (writer on members:default)
-  4   resetPassword            JWT + org_admin role + CIBA push approval
-  5   deactivateMember         JWT + org_admin role + RFC 8693 OBO → admin.widget.com
+  /api/mcp/delegatedAdmin — TeamAgent (7 tools, org_admin role required)
+  ─── ───────────────────────────  ──────────────────────────────────────
+  1   help                         None — open to unauthenticated callers
+  2   listMembers                  JWT + org_admin role claim
+  3   inviteMember                 JWT + org_admin role + Auth0 FGA (org_admin on org:<orgId>)
+  4   resetPassword                JWT + org_admin role + CIBA push approval
+  5   deactivateMember             JWT + org_admin role + RFC 8693 OBO → admin.widget.com
+  6   listPendingApprovals         JWT + org_admin role claim
+  7   approveUser                  JWT + org_admin role + CIBA push approval
 
   /api/mcp — original combined endpoint (all 11 tools, backward compat)
   See tool files in lib/tools/ for the full list.
@@ -208,9 +216,9 @@ Env vars required: FGA_STORE_ID, FGA_CLIENT_ID, FGA_CLIENT_SECRET
 Optional overrides: FGA_API_URL, FGA_API_TOKEN_ISSUER, FGA_API_AUDIENCE
 
 
-PATTERN 3 — CIBA PUSH APPROVAL (deleteInvoice, resetPassword)
-──────────────────────────────────────────────────────────────
-Tools: deleteInvoice · resetPassword
+PATTERN 3 — CIBA PUSH APPROVAL (deleteInvoice, resetPassword, approveUser)
+───────────────────────────────────────────────────────────────────────────
+Tools: deleteInvoice · resetPassword · approveUser
 
 CIBA (Client-Initiated Backchannel Authentication, RFC 9126) lets the server
 push an approval request to the user's enrolled device (Auth0 Guardian) before
