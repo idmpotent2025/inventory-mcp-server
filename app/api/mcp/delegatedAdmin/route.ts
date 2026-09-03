@@ -6,7 +6,7 @@
  *
  * Auth0 patterns per tool:
  *   listMembers      — JWT + org_admin role check
- *   inviteMember     — JWT + org_admin + FGA writer on members:default
+ *   inviteMember     — JWT + org_admin + FGA org_admin on org:<orgId>
  *   resetPassword    — JWT + org_admin + CIBA push approval
  *   deactivateMember — JWT + org_admin + RFC 8693 OBO → admin.widget.com
  *
@@ -76,12 +76,13 @@ function extractCtx(ctx: any, toolName: string) {
   const authInfo = ctx.http?.authInfo
   const sub = authInfo?.extra?.['sub'] as string | undefined
   const token = authInfo?.token
+  const orgId = authInfo?.extra?.['org_id'] as string | undefined
   if (!sub || !token) {
     console.warn(`[mcp/delegatedAdmin/${toolName}] missing sub or token`)
     return null
   }
-  console.log(`[mcp/delegatedAdmin/${toolName}] sub: ${sub}`)
-  return { sub, token, toolCallId: `mcp-${toolName}-${Date.now()}` }
+  console.log(`[mcp/delegatedAdmin/${toolName}] sub: ${sub} | orgId: ${orgId ?? 'none'}`)
+  return { sub, token, orgId, toolCallId: `mcp-${toolName}-${Date.now()}` }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +148,7 @@ const mcpHandler = createMcpHandler(
         title: 'Invite Member',
         description:
           'Invite a new member to the portal. ' +
-          'Requires org_admin role and FGA writer permission on members:default.',
+          'Requires org_admin role and FGA org_admin relation on org:<orgId>.',
         inputSchema: inviteMemberSchema,
       },
       async (params, ctx) => {
