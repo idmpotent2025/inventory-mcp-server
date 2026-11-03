@@ -29,8 +29,8 @@ export type ScheduleCPAMeetingInput = z.infer<typeof scheduleCPAMeetingSchema>
 //
 async function exchangeForGoogleToken(subjectToken: string): Promise<string> {
   const domain = process.env.AUTH0_DOMAIN!
-  const clientId = process.env.AUTH0_TOKEN_VAULT_CLIENT_ID!
-  const clientSecret = process.env.AUTH0_TOKEN_VAULT_CLIENT_SECRET!
+  const clientId = process.env.AUTH0_CLIENT_ID!
+  const clientSecret = process.env.AUTH0_CLIENT_SECRET!
 
   const body = new URLSearchParams({
     grant_type: 'urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token',
@@ -42,7 +42,7 @@ async function exchangeForGoogleToken(subjectToken: string): Promise<string> {
     connection: 'google-oauth2',
   })
 
-  console.log('[scheduleCPAMeeting] Token Vault exchange — client:', clientId, '| domain:', domain)
+  console.log('[scheduleCPAMeeting] Token Vault exchange — AUTH0_CLIENT_ID set:', !!clientId, '| domain:', domain)
 
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
