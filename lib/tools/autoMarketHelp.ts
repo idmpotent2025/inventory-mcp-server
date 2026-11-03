@@ -8,7 +8,7 @@ const HELP_TEXT = `
 Auto Market MCP Server — available tools:
 
 PUBLIC (no login required):
-  • searchCars            Search listings by make, model, year, price, mileage, fuel type, or state.
+  • listCars              Search listings by make, model, year, price, mileage, fuel type, or state.
   • getCarDetails         Get full details + Carfax summary for a VIN.
 
 REQUIRES LOGIN (JWT bearer token):

@@ -4,7 +4,7 @@
  * Used car marketplace tools (CapitalOne Auto Navigator / Carvana style).
  *
  * Auth0 patterns per tool:
- *   Public (no auth):         autoMarketHelp, searchCars, getCarDetails
+ *   Public (no auth):         help, listCars, getCarDetails
  *   JWT bearer:               getWishlist
  *   JWT + FGA:                addToWishlist, removeFromWishlist
  *   JWT + RFC 8693 OBO:       checkPreApproval
@@ -83,11 +83,11 @@ function errorResponse(text: string) {
 
 const mcpHandler = createMcpHandler(
   (server) => {
-    // ── Tool 1: autoMarketHelp — public ──────────────────────────────────────
+    // ── Tool 1: help — public ─────────────────────────────────────────────────
     server.registerTool(
-      'autoMarketHelp',
+      'help',
       {
-        title:       'Auto Market Help',
+        title:       'Help',
         description: 'Describe all available tools, their purpose, and the Auth0 pattern each one demonstrates.',
         inputSchema: autoMarketHelpSchema,
       },
@@ -97,18 +97,18 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 2: searchCars — public ───────────────────────────────────────────
+    // ── Tool 2: listCars — public ─────────────────────────────────────────────
     server.registerTool(
-      'searchCars',
+      'listCars',
       {
-        title:       'Search Cars',
+        title:       'List Cars',
         description:
           'Search used car listings by make, model, year, price, mileage, fuel type, or dealer state. ' +
           'No login required.',
         inputSchema: searchCarsSchema,
       },
       async (params, _ctx) => {
-        console.log('[mcp/autoMarket/searchCars] params:', JSON.stringify(params))
+        console.log('[mcp/autoMarket/listCars] params:', JSON.stringify(params))
         try {
           const result = executeSearchCars(params)
           return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
@@ -292,7 +292,7 @@ const mcpHandler = createMcpHandler(
   },
 )
 
-// required: false — public tools (searchCars, getCarDetails, autoMarketHelp) work without a token
+// required: false — public tools (help, listCars, getCarDetails) work without a token
 const authedHandler = withMcpAuth(mcpHandler, verifyToken, {
   required: false,
   resourceUrl: process.env.NEXT_PUBLIC_APP_URL ?? 'https://localhost:3000',
