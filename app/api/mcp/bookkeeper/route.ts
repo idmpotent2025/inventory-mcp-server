@@ -18,7 +18,7 @@ import { jwtVerify, createRemoteJWKSet } from 'jose'
 
 import { listInvoicesSchema, executeListInvoices } from '@/lib/tools/listInvoices'
 import { addInvoiceSchema, executeAddInvoice } from '@/lib/tools/addInvoice'
-import { notifyViaGmailSchema, executeNotifyViaGmail } from '@/lib/tools/notifyInvoice'
+import { scheduleCPAMeetingSchema, executeScheduleCPAMeeting } from '@/lib/tools/scheduleCPAMeeting'
 import { payInvoiceSchema, executePayInvoice } from '@/lib/tools/payInvoice'
 import { deleteInvoiceSchema, executeDeleteInvoice } from '@/lib/tools/deleteInvoice'
 import { helpSchema, executeHelp } from '@/lib/tools/help'
@@ -154,39 +154,39 @@ const mcpHandler = createMcpHandler(
       },
     )
 
-    // ── Tool 3: notifyViaGmail ────────────────────────────────────────────────
-    // Authorization: bearer token + Auth0 Token Vault OBO (Google gmail.send
+    // ── Tool 3: scheduleCPAMeeting ────────────────────────────────────────────
+    // Authorization: bearer token + Auth0 Token Vault OBO (Google Calendar
     //               scope via google-oauth2 connection).
     server.registerTool(
-      'notifyViaGmail',
+      'scheduleCPAMeeting',
       {
-        title: 'Notify Via Gmail',
+        title: 'Schedule CPA Meeting',
         description:
-          'Send an invoice notification email via Gmail. Uses Auth0 Token Vault to obtain ' +
-          'the user\'s Google credentials (OBO). Recipient is taken from the email claim ' +
-          'in the user\'s access token.',
-        inputSchema: notifyViaGmailSchema,
+          'Schedule a meeting on the user\'s Google Calendar. Uses Auth0 Token Vault to obtain ' +
+          'the user\'s Google credentials (OBO). Accepts a title, ISO 8601 start time, duration in minutes, ' +
+          'and optional description or attendee email.',
+        inputSchema: scheduleCPAMeetingSchema,
       },
       async (params, ctx) => {
-        console.log('[mcp/notifyViaGmail] called — params:', JSON.stringify(params))
-        const mcpCtx = extractCtx(ctx, 'notifyViaGmail')
+        console.log('[mcp/scheduleCPAMeeting] called — params:', JSON.stringify(params))
+        const mcpCtx = extractCtx(ctx, 'scheduleCPAMeeting')
         if (!mcpCtx) return errorResponse('Unauthorized: missing user identity.')
 
         try {
-          const result = await executeNotifyViaGmail(params, mcpCtx)
-          console.log('[mcp/notifyViaGmail] success — result:', JSON.stringify(result))
+          const result = await executeScheduleCPAMeeting(params, mcpCtx)
+          console.log('[mcp/scheduleCPAMeeting] success — result:', JSON.stringify(result))
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
           }
         } catch (err: unknown) {
-          if (err instanceof Error && err.message === 'GMAIL_NOT_CONNECTED') {
-            console.warn('[mcp/notifyViaGmail] no vaulted Google token — user must connect Gmail')
+          if (err instanceof Error && err.message === 'GCAL_NOT_CONNECTED') {
+            console.warn('[mcp/scheduleCPAMeeting] no vaulted Google token — user must connect Google Calendar')
             return errorResponse(
-              'Gmail not connected: please go to Settings → Connect Gmail in the Portal and authorize access, then retry.',
+              'Google Calendar not connected: please click "Connect Google Calendar" in the Invoice Agent page and authorize access, then retry.',
             )
           }
-          const msg = err instanceof Error ? err.message : 'Failed to send Gmail notification.'
-          console.error('[mcp/notifyViaGmail] error:', msg)
+          const msg = err instanceof Error ? err.message : 'Failed to schedule meeting.'
+          console.error('[mcp/scheduleCPAMeeting] error:', msg)
           return errorResponse(msg)
         }
       },
