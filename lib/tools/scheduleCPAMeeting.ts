@@ -32,6 +32,12 @@ async function exchangeForGoogleToken(subjectToken: string): Promise<string> {
   const clientId = process.env.AUTH0_CLIENT_ID!
   const clientSecret = process.env.AUTH0_CLIENT_SECRET!
 
+  // Decode subject token claims for debugging (no verification)
+  try {
+    const claims = JSON.parse(Buffer.from(subjectToken.split('.')[1], 'base64url').toString())
+    console.log('[scheduleCPAMeeting] subject_token claims — iss:', claims.iss, '| aud:', claims.aud, '| sub:', claims.sub, '| azp:', claims.azp)
+  } catch { console.warn('[scheduleCPAMeeting] could not decode subject_token') }
+
   const body = new URLSearchParams({
     grant_type: 'urn:auth0:params:oauth:grant-type:token-exchange:federated-connection-access-token',
     client_id: clientId,
@@ -42,7 +48,7 @@ async function exchangeForGoogleToken(subjectToken: string): Promise<string> {
     connection: 'google-oauth2',
   })
 
-  console.log('[scheduleCPAMeeting] Token Vault exchange — AUTH0_CLIENT_ID set:', !!clientId, '| domain:', domain)
+  console.log('[scheduleCPAMeeting] Token Vault request — domain:', domain, '| client_id:', clientId, '| connection: google-oauth2')
 
   const res = await fetch(`https://${domain}/oauth/token`, {
     method: 'POST',
